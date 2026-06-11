@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, patch, post } from '../api'
+import { get, patch, post, put } from '../api'
 import {
-  CAT_LABEL, Dictate, Entry, Header, Icons, Meter, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, fmtTime, useToast,
+  CAT_LABEL, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, fmtTime, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -10,25 +10,25 @@ const STATUS_TEXT = { ok: 'в нормі', warn: 'потребує уваги', 
 
 export default function Owner() {
   const [tab, setTab] = useState('home')
-  const [view, setView] = useState(null) // дрілдаун: production | life | risks
-
-  // зі статус-рядка «Фінанси» ведемо на вкладку, решта — у дрілдаун
-  const openView = (v) => {
-    if (v === 'money') { setView(null); setTab('money') } else setView(v)
-  }
+  const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
+  const [refreshKey, setRefreshKey] = useState(0) // після диктовки перезавантажуємо активний екран
 
   const screen =
     view === 'production' ? <Projects onBack={() => setView(null)} /> :
     view === 'life' ? <Life onBack={() => setView(null)} /> :
     view === 'risks' ? <Risks onBack={() => setView(null)} /> :
-    tab === 'home' ? <Home openView={openView} /> :
+    view === 'money' ? <Finance onBack={() => setView(null)} /> :
+    tab === 'home' ? <Home openView={setView} /> :
     tab === 'flow' ? <Flow /> :
     tab === 'team' ? <Team /> :
     <Finance />
 
   return (
-    <div className="app">
-      {screen}
+    <div className="app with-dock">
+      <div key={refreshKey}>{screen}</div>
+      <div className="dictate-dock">
+        <Dictate onSaved={() => setRefreshKey((k) => k + 1)} />
+      </div>
       <TabBar
         tabs={[
           { key: 'home', icon: 'pulse', label: 'Головна' },
@@ -86,8 +86,6 @@ function Home({ openView }) {
       {d.feed.slice(0, 6).map((e) => (
         <Entry key={e.id} e={e} label={e.role_label?.toUpperCase()} />
       ))}
-
-      <Dictate onSaved={load} />
     </div>
   )
 }
@@ -110,6 +108,7 @@ function Flow() {
 function Team() {
   const [team, setTeam] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [sel, setSel] = useState(null) // вибраний учасник → редагування
   const [username, setUsername] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('manager')
@@ -136,7 +135,10 @@ function Team() {
       <Header icon="shield" color="var(--orange)" title="Команда" sub={`${team.length} учасники`} />
       <div className="card" style={{ padding: '2px 14px' }}>
         {team.map((m) => (
-          <div key={m.id} className={`member ${m.status === 'invited' ? 'invited' : ''}`}>
+          <div key={m.id} className={`member ${m.status === 'invited' ? 'invited' : ''}`}
+            role={m.role === 'owner' ? undefined : 'button'} tabIndex={m.role === 'owner' ? undefined : 0}
+            style={m.role === 'owner' ? undefined : { cursor: 'pointer' }}
+            onClick={m.role === 'owner' ? undefined : () => setSel(m)}>
             <div className="avatar" style={{ background: m.status === 'invited' ? '#d9c79a' : ROLE_COLOR[m.role] }}>
               {m.role === 'owner' ? 'Я' : initials(m.name || m.username || '?')}
             </div>
@@ -150,6 +152,9 @@ function Team() {
               style={{ background: m.status === 'invited' ? 'transparent' : ROLE_COLOR[m.role], color: m.status === 'invited' ? ROLE_COLOR[m.role] : '#fff' }}>
               {ROLE_BADGE[m.role]}
             </span>
+            {m.role !== 'owner' && (
+              <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons.pencil(15)}</span>
+            )}
           </div>
         ))}
       </div>
@@ -171,15 +176,72 @@ function Team() {
           </button>
         </Sheet>
       )}
+      {sel && (
+        <MemberSheet m={sel} onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
       {toast}
     </div>
   )
 }
 
+/* ---------- редагування учасника ---------- */
+function MemberSheet({ m, onClose, onChanged }) {
+  const [name, setName] = useState(m.name || '')
+  const [username, setUsername] = useState(m.username || '')
+  const [role, setRole] = useState(m.role)
+  const [busy, setBusy] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [toast, showToast] = useToast()
+  const changed =
+    name.trim() !== (m.name || '') ||
+    username.trim().replace(/^@/, '') !== (m.username || '') ||
+    role !== m.role
+
+  const save = async (extra = {}) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await patch(`/api/team/${m.id}`, { name: name.trim(), username: username.trim(), role, ...extra })
+      onChanged()
+    } catch (e) { showToast(`⚠️ ${e.message}`) } finally { setBusy(false) }
+  }
+
+  return (
+    <Sheet title={m.name || `@${m.username}`} onClose={onClose}>
+      <div className="preview-meta">
+        {m.status === 'invited' ? 'запрошення надіслано — чекає /start у боті' : 'активний учасник'}
+      </div>
+      <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
+      <select value={role} onChange={(e) => setRole(e.target.value)}>
+        <option value="manager">Менеджер — проєкти</option>
+        <option value="assistant">Асистент — побут і пес</option>
+        <option value="driver">Водій — логістика</option>
+      </select>
+      <button className="btn-primary" style={{ background: 'var(--orange)', opacity: changed ? 1 : 0.45 }}
+        disabled={busy || !changed} onClick={() => save()}>
+        {busy ? 'Зберігаю…' : 'Зберегти зміни'}
+      </button>
+      <button className="btn-small ghost danger" onClick={() => setConfirmDel(true)} disabled={busy}>
+        {Icons.trash(15)} Видалити з команди
+      </button>
+      {confirmDel && (
+        <ConfirmDialog text="Впевнені, що видалити?"
+          onYes={() => { setConfirmDel(false); save({ deleted: true }) }}
+          onNo={() => setConfirmDel(false)} />
+      )}
+      {toast}
+    </Sheet>
+  )
+}
+
 /* ---------- Фінанси ---------- */
-function Finance() {
+function Finance({ onBack }) {
   const [m, setM] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [sel, setSel] = useState(null) // вибрана витрата → шторка з коментарем
+  const [editBudget, setEditBudget] = useState(false)
   const [text, setText] = useState('')
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
@@ -205,13 +267,15 @@ function Finance() {
 
   return (
     <div className="screen">
+      {onBack && <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>}
       <Header icon="wallet" color="var(--orange)" title="Фінанси" sub={monthName} />
       <div className="stat-grid">
         <div className="stat"><div className="num">{m.spent.toLocaleString('uk-UA')} <small>₴</small></div><div className="lbl">витрачено</div></div>
         <div className="stat"><div className="num">{m.budget_pct}<small>%</small></div><div className="lbl">бюджету</div></div>
       </div>
-      <Meter title="Бюджет місяця" value={`${m.budget_pct}%`} pct={m.budget_pct}
-        level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'} />
+      <Meter title="Бюджет місяця" value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
+        pct={m.budget_pct} level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'}
+        onEdit={() => setEditBudget(true)} />
       <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={() => setAdding(true)}>
         {Icons.plus(20)} Додати витрату
       </button>
@@ -219,26 +283,109 @@ function Finance() {
       <div className="section-label">Останні витрати</div>
       {m.expenses.length === 0 && <div className="empty">Витрат ще немає</div>}
       {m.expenses.map((e) => (
-        <div key={e.id} className="item" style={{ cursor: 'default' }}>
+        <div key={e.id} className="item" role="button" tabIndex={0} onClick={() => setSel(e)}>
           <span className={`dot ${e.approved ? 'ok' : 'warn'}`} />
           <span className="ico">{e.owner_role === 'driver' ? Icons.fuel(19) : e.owner_role === 'assistant' ? Icons.cart(19) : Icons.film(19)}</span>
-          <span className="grow">{e.text || 'Витрата'}</span>
+          <span className="grow">
+            {e.text || 'Витрата'}
+            {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
+          </span>
           <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>
           {!e.approved && m.can_approve && (
-            <button className="btn-small" onClick={() => approve(e.id)}>OK</button>
+            <button className="btn-confirm" onClick={(ev) => { ev.stopPropagation(); approve(e.id) }}>
+              {Icons.check(14)} Підтвердити
+            </button>
           )}
+          <button className="btn-icon" aria-label="Редагувати"
+            onClick={(ev) => { ev.stopPropagation(); setSel(e) }}>
+            {Icons.pencil(16)}
+          </button>
         </div>
       ))}
 
       {adding && (
         <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
-          <input placeholder="На що (напр. Оренда обладнання)" value={text} onChange={(e) => setText(e.target.value)} />
-          <input placeholder="Сума, ₴" type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={addExpense}>Зберегти</button>
+          <input placeholder="На що (напр. Оренда обладнання)" value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+          <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
+          <button className="btn-primary"
+            style={{ background: 'var(--orange)', opacity: text.trim() && Number(amount) > 0 ? 1 : 0.45 }}
+            disabled={!text.trim() || !(Number(amount) > 0)}
+            onClick={addExpense}>
+            Зберегти
+          </button>
         </Sheet>
+      )}
+      {sel && (
+        <ExpenseSheet e={sel} canApprove={m.can_approve} onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
+      {editBudget && (
+        <BudgetSheet onClose={() => setEditBudget(false)}
+          onSaved={() => { setEditBudget(false); load() }} />
       )}
       {toast}
     </div>
+  )
+}
+
+/* ---------- бюджет місяця: секції «на що + сума» ---------- */
+function BudgetSheet({ onClose, onSaved }) {
+  const [items, setItems] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [toast, showToast] = useToast()
+
+  useEffect(() => {
+    get('/api/budget')
+      .then((b) => setItems(
+        b.items.length
+          ? b.items.map((i) => ({ name: i.name, amount: String(Math.round(i.amount)) }))
+          : [{ name: '', amount: '' }],
+      ))
+      .catch(() => setItems([{ name: '', amount: '' }]))
+  }, [])
+
+  const upd = (idx, field, v) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: v } : it)))
+  const removeRow = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx))
+  const addRow = () => setItems((prev) => [...prev, { name: '', amount: '' }])
+
+  const total = (items || []).reduce((s, i) => s + (Number(i.amount) || 0), 0)
+  const valid = items && items.every((i) => i.name.trim() && Number(i.amount) > 0)
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      await put('/api/budget', { items: items.map((i) => ({ name: i.name.trim(), amount: Number(i.amount) })) })
+      onSaved()
+    } catch (e) { showToast(`⚠️ ${e.message}`) } finally { setBusy(false) }
+  }
+
+  return (
+    <Sheet title="Бюджет місяця" onClose={onClose}>
+      {!items && <div className="loading" style={{ padding: '16px 0' }}>Завантаження…</div>}
+      {items && (
+        <>
+          {items.map((it, idx) => (
+            <div key={idx} className="budget-row">
+              <input placeholder="На що (напр. Продакшн)" value={it.name}
+                onChange={(e) => upd(idx, 'name', e.target.value)} autoFocus={idx === items.length - 1 && !it.name} />
+              <MoneyInput value={it.amount} onChange={(v) => upd(idx, 'amount', v)} placeholder="Сума" />
+              <button className="btn-icon" aria-label="Прибрати секцію" onClick={() => removeRow(idx)}>
+                {Icons.trash(16)}
+              </button>
+            </div>
+          ))}
+          <button className="btn-dashed" style={{ color: 'var(--orange)' }} onClick={addRow}>
+            {Icons.plus(18)} Додати секцію
+          </button>
+          <div className="preview-meta">Разом: {total.toLocaleString('uk-UA')} ₴ на місяць</div>
+          <button className="btn-primary" style={{ background: 'var(--orange)', opacity: valid ? 1 : 0.45 }}
+            disabled={busy || !valid} onClick={save}>
+            {busy ? 'Зберігаю…' : 'Зберегти'}
+          </button>
+        </>
+      )}
+      {toast}
+    </Sheet>
   )
 }
 
@@ -246,10 +393,12 @@ function Finance() {
 function Projects({ onBack }) {
   const [tasks, setTasks] = useState(null)
   const [feed, setFeed] = useState([])
-  useEffect(() => {
+  const [sel, setSel] = useState(null)
+  const load = useCallback(() => {
     get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([]))
     get('/api/feed').then((f) => setFeed(f.filter((e) => e.category === 'production'))).catch(() => {})
   }, [])
+  useEffect(() => { load() }, [load])
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   return (
@@ -259,10 +408,14 @@ function Projects({ onBack }) {
       <div className="section-label">Активні</div>
       {open.length === 0 && <div className="empty">Активних задач немає</div>}
       {open.map((t) => (
-        <TaskItem key={t.id} t={t} icon="film" onToggle={() => toggleTask(t, setTasks)} />
+        <TaskItem key={t.id} t={t} icon="film" onOpen={() => setSel(t)} />
       ))}
       <div className="section-label">Останнє</div>
       {feed.slice(0, 5).map((e) => <Entry key={e.id} e={e} label={e.role_label?.toUpperCase()} />)}
+      {sel && (
+        <TaskSheet t={sel} color="var(--blue)" onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
     </div>
   )
 }
@@ -270,12 +423,14 @@ function Projects({ onBack }) {
 /* ---------- дрілдаун: Побут ---------- */
 function Life({ onBack }) {
   const [tasks, setTasks] = useState(null)
-  useEffect(() => {
+  const [sel, setSel] = useState(null)
+  const load = useCallback(() => {
     Promise.all([
       get('/api/tasks?category=life').catch(() => []),
       get('/api/tasks?category=dog').catch(() => []),
     ]).then(([a, b]) => setTasks([...a, ...b]))
   }, [])
+  useEffect(() => { load() }, [load])
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -286,12 +441,16 @@ function Life({ onBack }) {
       <div className="section-label">На сьогодні</div>
       {open.length === 0 && <div className="empty">Все зроблено 🎉</div>}
       {open.map((t) => (
-        <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onToggle={() => toggleTask(t, setTasks)} />
+        <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onOpen={() => setSel(t)} />
       ))}
       {done.length > 0 && <div className="section-label">Зроблено</div>}
       {done.slice(0, 5).map((t) => (
-        <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onToggle={() => toggleTask(t, setTasks)} />
+        <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onOpen={() => setSel(t)} />
       ))}
+      {sel && (
+        <TaskSheet t={sel} color="var(--green)" onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
     </div>
   )
 }
@@ -328,7 +487,7 @@ function Risks({ onBack }) {
           </div>
           <div className="text">{r.text}</div>
           <div className="meta" style={{ justifyContent: 'space-between' }}>
-            <span>{r.keyword_hit ? '⚠️ пуш власнику' : '🕐 чекає рішення'}</span>
+            <span className="ico-text">{r.keyword_hit ? Icons.alert(13) : Icons.clock(13)} {r.keyword_hit ? 'пуш власнику' : 'чекає рішення'}</span>
             <button className="btn-small ghost" onClick={() => resolve(r.id)}>Вирішено</button>
           </div>
         </div>
@@ -338,7 +497,7 @@ function Risks({ onBack }) {
         <div key={r.id} className="entry green">
           <div className="top"><span className="label">ВИРІШЕНО</span><span className="time">{fmtTime(r.time)}</span></div>
           <div className="text">{r.text}</div>
-          <div className="meta">✓ закрито</div>
+          <div className="meta">{Icons.check(13)} закрито</div>
         </div>
       ))}
       {toast}
@@ -347,24 +506,17 @@ function Risks({ onBack }) {
 }
 
 /* ---------- спільне для задач ---------- */
-function TaskItem({ t, icon, onToggle }) {
+function TaskItem({ t, icon, onOpen }) {
   const overdue = t.due && new Date(t.due) <= new Date()
   return (
-    <button className={`item ${t.status === 'done' ? 'done' : ''}`} onClick={onToggle}>
+    <button className={`item ${t.status === 'done' ? 'done' : ''}`} onClick={onOpen}>
       <span className={`dot ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`} />
       <span className="ico">{Icons[icon]?.(19)}</span>
       <span className="grow">{t.text}</span>
       <span className={`tag ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`}>
         {t.status === 'done' ? 'готово' : overdue ? 'терміново' : t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}
       </span>
+      <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
     </button>
   )
-}
-
-async function toggleTask(t, setTasks) {
-  const next = t.status === 'open' ? 'done' : 'open'
-  try {
-    await patch(`/api/tasks/${t.id}`, { status: next })
-    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)))
-  } catch { /* ignore */ }
 }

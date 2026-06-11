@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { post } from './api'
+import { patch, post } from './api'
 import { haptic } from './telegram'
 
 /* ---------- іконки (інлайн SVG, stroke 1.8) ---------- */
@@ -29,6 +29,11 @@ export const Icons = {
   addUser: (s) => <I size={s}><circle cx="10" cy="8" r="3.5" /><path d="M4 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" /><path d="M19 7v6M16 10h6" /></I>,
   task: (s) => <I size={s}><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8.5 12.5l2.5 2.5 4.5-5" /></I>,
   back: (s) => <I size={s}><path d="M15 5l-7 7 7 7" /></I>,
+  pencil: (s) => <I size={s}><path d="M4 20l1.2-4.2L16.5 4.5a2.12 2.12 0 013 3L8.2 18.8z" /><path d="M14.5 6.5l3 3" /></I>,
+  close: (s) => <I size={s}><path d="M6 6l12 12M18 6L6 18" /></I>,
+  trash: (s) => <I size={s}><path d="M4 7h16" /><path d="M9.5 7V5a1.5 1.5 0 011.5-1.5h2A1.5 1.5 0 0114.5 5v2" /><path d="M6.5 7l1 13h9l1-13" /><path d="M10 11v5M14 11v5" /></I>,
+  undo: (s) => <I size={s}><path d="M4 10h10a5 5 0 110 10h-3" /><path d="M8 6l-4 4 4 4" /></I>,
+  comment: (s) => <I size={s}><path d="M21 11.5A8.5 8.5 0 0112.5 20c-1.3 0-2.5-.25-3.6-.7L4 21l1.2-4A8.4 8.4 0 014 11.5a8.5 8.5 0 0117 0z" /></I>,
 }
 
 export const ROLE_COLOR = { owner: 'var(--ink)', manager: 'var(--blue)', assistant: 'var(--green)', driver: 'var(--gold)' }
@@ -94,11 +99,16 @@ export function TabBar({ tabs, active, onChange }) {
   )
 }
 
-export function Meter({ title, value, pct, level }) {
+export function Meter({ title, value, pct, level, onEdit }) {
   return (
     <div className="meter">
       <div className="row">
-        <span className="title">{title}</span>
+        <span className="title ico-text">
+          {title}
+          {onEdit && (
+            <button className="btn-icon" aria-label="Редагувати" onClick={onEdit}>{Icons.pencil(15)}</button>
+          )}
+        </span>
         <span className={`val ${level || ''}`}>{value}</span>
       </div>
       <div className="bar"><i style={{ width: `${Math.min(pct, 100)}%` }} /></div>
@@ -118,21 +128,27 @@ export function useToast() {
   return [node, show]
 }
 
-/* ---------- диктування: текст + мікрофон → /api/ingest ---------- */
+/* ---------- диктування: текст + мікрофон → прев'ю → /api/ingest ---------- */
 export function Dictate({ placeholder = 'Продиктуй або напиши…', color = 'var(--orange)', onSaved }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [recording, setRecording] = useState(false)
+  const [phase, setPhase] = useState(null) // null | 'rec' (запис) | 'stt' (розшифровка)
+  const [seconds, setSeconds] = useState(0)
+  const [preview, setPreview] = useState(null) // відповідь /ingest/voice/preview
+  const [draft, setDraft] = useState('') // редагований текст у діалозі
   const recRef = useRef(null)
+  const timerRef = useRef(null)
   const [toast, showToast] = useToast()
 
-  const submitText = async () => {
-    const t = text.trim()
-    if (!t || busy) return
+  useEffect(() => () => clearInterval(timerRef.current), [])
+
+  const save = async (t) => {
+    if (!t.trim() || busy) return
     setBusy(true)
     try {
-      const r = await post('/api/ingest', { text: t })
+      const r = await post('/api/ingest', { text: t.trim() })
       setText('')
+      setPreview(null)
       showToast(`✅ ${TYPE_LABEL[r.type] || 'Запис'} · ${CAT_LABEL[r.category] || ''} — збережено`)
       onSaved?.(r)
     } catch (err) {
@@ -142,11 +158,7 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
     }
   }
 
-  const toggleRecord = async () => {
-    if (recording) {
-      recRef.current?.stop()
-      return
-    }
+  const startRecord = async () => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       showToast('Мікрофон недоступний у цьому WebView — напиши текстом')
       return
@@ -158,29 +170,38 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
       rec.ondataavailable = (e) => chunks.push(e.data)
       rec.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop())
-        setRecording(false)
-        setBusy(true)
+        clearInterval(timerRef.current)
+        setPhase('stt')
         try {
           const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
           const fd = new FormData()
           fd.append('file', blob, 'voice.webm')
-          const r = await post('/api/ingest/voice', fd)
-          showToast(`✅ «${r.transcript?.slice(0, 40) ?? r.text}» — збережено`)
-          onSaved?.(r)
+          const r = await post('/api/ingest/voice/preview', fd)
+          setPreview(r)
+          setDraft(r.text || r.transcript || '')
         } catch (err) {
           showToast(`⚠️ ${err.message}`)
         } finally {
-          setBusy(false)
+          setPhase(null)
         }
       }
       recRef.current = rec
       rec.start()
-      setRecording(true)
+      setSeconds(0)
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000)
+      setPhase('rec')
       haptic('medium')
     } catch {
       showToast('Немає доступу до мікрофона')
     }
   }
+
+  const stopRecord = () => {
+    haptic('medium')
+    recRef.current?.stop()
+  }
+
+  const fmtSec = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   return (
     <>
@@ -189,21 +210,236 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
           value={text}
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submitText()}
-          disabled={busy}
+          onKeyDown={(e) => e.key === 'Enter' && save(text)}
+          disabled={busy || phase !== null}
         />
         <button
-          className={recording ? 'rec' : ''}
           style={{ background: color }}
-          onClick={text.trim() ? submitText : toggleRecord}
-          disabled={busy}
+          onClick={text.trim() ? () => save(text) : startRecord}
+          disabled={busy || phase !== null}
           aria-label={text.trim() ? 'Надіслати' : 'Диктувати'}
         >
           {text.trim() ? Icons.send(20) : Icons.mic(20)}
         </button>
       </div>
+
+      {/* повноекранний оверлей: блокує все, поки йде запис / розшифровка */}
+      {phase && (
+        <div className="record-overlay">
+          {phase === 'rec' ? (
+            <>
+              <div className="mic-circle">{Icons.mic(40)}</div>
+              <div className="rec-time">{fmtSec(seconds)}</div>
+              <div className="rec-hint">Йде запис — говори, я слухаю</div>
+              <button className="btn-stop" onClick={stopRecord}>
+                <span className="stop-square" /> Зупинити
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mic-circle stt">{Icons.clock(40)}</div>
+              <div className="rec-hint">Розшифровую та прибираю воду…</div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* діалог підтвердження: відфільтрований текст можна підправити */}
+      {preview && (
+        <Sheet title="Перевір запис" onClose={() => setPreview(null)}>
+          <div className="preview-meta">
+            {TYPE_LABEL[preview.type] || 'ЗАПИС'} · {CAT_LABEL[preview.category] || ''}
+            {preview.amount ? ` · ${preview.amount} ${preview.currency || '₴'}` : ''}
+            {preview.due ? ` · до ${preview.due}` : ''}
+          </div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            autoFocus
+          />
+          {preview.transcript && preview.transcript !== draft && (
+            <div className="transcript-hint">Почув: «{preview.transcript}»</div>
+          )}
+          <button className="btn-primary" style={{ background: color }}
+            onClick={() => save(draft)} disabled={busy || !draft.trim()}>
+            {Icons.send(18)} {busy ? 'Зберігаю…' : 'Відправити'}
+          </button>
+          <button className="btn-small ghost" onClick={() => setPreview(null)} disabled={busy}>
+            Скасувати
+          </button>
+        </Sheet>
+      )}
       {toast}
     </>
+  )
+}
+
+/* ---------- грошове поле: «12 000 ₴» прямо під час вводу, курсор перед ₴ ---------- */
+const HRV_SUFFIX = ' ₴'
+
+export function MoneyInput({ value, onChange, placeholder = 'Сума, ₴', autoFocus, invalid }) {
+  // value — рядок із цифр ('12000'); у полі показуємо '12 000 ₴', назад віддаємо чисті цифри
+  const ref = useRef(null)
+  const display = value
+    ? Number(String(value).replace(/\D/g, '') || 0).toLocaleString('uk-UA') + HRV_SUFFIX
+    : ''
+
+  const handle = (e) => {
+    const v = e.target.value
+    let digits = v.replace(/\D/g, '')
+    // backspace зʼїв лише суфікс « ₴» — користувач хотів стерти останню цифру
+    if (display && (v === display.slice(0, -1) || v === display.slice(0, -2))) digits = digits.slice(0, -1)
+    onChange(digits.slice(0, 12))
+  }
+
+  // після кожного вводу тримаємо курсор перед « ₴»
+  const placeCursor = () => {
+    const el = ref.current
+    if (!el || !el.value) return
+    const pos = el.value.length - HRV_SUFFIX.length
+    if (el.selectionStart > pos) el.setSelectionRange(pos, pos)
+  }
+  useEffect(placeCursor)
+
+  return (
+    <div className={`money-input ${invalid ? 'invalid' : ''}`}>
+      <input ref={ref} type="text" inputMode="numeric" placeholder={placeholder}
+        value={display} onChange={handle} onFocus={() => setTimeout(placeCursor, 0)}
+        onClick={placeCursor} autoFocus={autoFocus} />
+    </div>
+  )
+}
+
+/* ---------- шторка витрати: коментар + підтвердження ---------- */
+export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, onChanged }) {
+  const [comment, setComment] = useState(e.comment || '')
+  const [amount, setAmount] = useState(e.amount ? String(Math.round(e.amount)) : '')
+  const [busy, setBusy] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [toast, showToast] = useToast()
+  const amountValid = Number(amount) > 0
+  const changed = comment.trim() !== (e.comment || '') || (amountValid && Number(amount) !== e.amount)
+
+  const save = async (extra = {}) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      const body = { comment: comment.trim(), ...extra }
+      if (amountValid) body.amount = Number(amount)
+      await patch(`/api/money/${e.id}`, body)
+      onChanged()
+    } catch (err) { showToast(`⚠️ ${err.message}`) } finally { setBusy(false) }
+  }
+
+  const remove = () => setConfirmDel(true)
+
+  return (
+    <Sheet title={e.text || 'Витрата'} onClose={onClose}>
+      <div className="preview-meta ico-text">
+        {e.approved ? Icons.check(13) : Icons.clock(13)}
+        {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.time)}
+      </div>
+      <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" invalid={!amountValid} />
+      <textarea rows={3} autoFocus value={comment} onChange={(ev) => setComment(ev.target.value)}
+        placeholder="Коментар (напр.: наступного разу купи дешевше)" />
+      <button className="btn-primary" style={{ background: color, opacity: changed && amountValid ? 1 : 0.45 }}
+        onClick={() => save()} disabled={busy || !changed || !amountValid}>
+        {busy ? 'Зберігаю…' : 'Зберегти зміни'}
+      </button>
+      {canApprove && (e.approved ? (
+        <button className="btn-small ghost" onClick={() => save({ approved: false })} disabled={busy}>
+          {Icons.undo(15)} Зняти підтвердження
+        </button>
+      ) : (
+        <button className="btn-confirm wide" onClick={() => save({ approved: true })} disabled={busy}>
+          {Icons.check(18)} Підтвердити
+        </button>
+      ))}
+      <button className="btn-small ghost danger" onClick={remove} disabled={busy}>
+        {Icons.trash(15)} Видалити витрату
+      </button>
+      {confirmDel && (
+        <ConfirmDialog text="Впевнені, що видалити?"
+          onYes={() => { setConfirmDel(false); save({ deleted: true }) }}
+          onNo={() => setConfirmDel(false)} />
+      )}
+      {toast}
+    </Sheet>
+  )
+}
+
+/* ---------- шторка задачі: редагування, виконано, видалення ---------- */
+export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
+  const [text, setText] = useState(t.text)
+  const [due, setDue] = useState(t.due || '')
+  const [busy, setBusy] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [toast, showToast] = useToast()
+  const changed = text.trim() !== t.text || (due || '') !== (t.due || '')
+
+  const save = async (extra = {}) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await patch(`/api/tasks/${t.id}`, { text: text.trim(), due: due || null, ...extra })
+      onChanged()
+    } catch (err) { showToast(`⚠️ ${err.message}`) } finally { setBusy(false) }
+  }
+
+  return (
+    <Sheet title="Задача" onClose={onClose}>
+      <div className="preview-meta ico-text">
+        {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
+        {t.status === 'done' ? 'виконано' : 'в роботі'} · {CAT_LABEL[t.category] || ''}
+      </div>
+      <textarea rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)}
+        placeholder="Текст задачі" />
+      <label className="transcript-hint">Дедлайн (необов'язково)</label>
+      <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+      <button className="btn-primary" style={{ background: color, opacity: changed && text.trim() ? 1 : 0.45 }}
+        disabled={busy || !changed || !text.trim()} onClick={() => save()}>
+        {busy ? 'Зберігаю…' : 'Зберегти зміни'}
+      </button>
+      {t.status === 'open' ? (
+        <button className="btn-confirm wide" onClick={() => save({ status: 'done' })} disabled={busy}>
+          {Icons.check(18)} Виконано
+        </button>
+      ) : (
+        <button className="btn-small ghost" onClick={() => save({ status: 'open' })} disabled={busy}>
+          {Icons.undo(15)} Повернути в роботу
+        </button>
+      )}
+      <button className="btn-small ghost danger" onClick={() => setConfirmDel(true)} disabled={busy}>
+        {Icons.trash(15)} Видалити задачу
+      </button>
+      {confirmDel && (
+        <ConfirmDialog text="Впевнені, що видалити?"
+          onYes={() => { setConfirmDel(false); save({ deleted: true }) }}
+          onNo={() => setConfirmDel(false)} />
+      )}
+      {toast}
+    </Sheet>
+  )
+}
+
+/* ---------- підтвердження посередині екрана: Так / Ні ---------- */
+export function ConfirmDialog({ text, onYes, onNo }) {
+  useEffect(() => {
+    const h = (e) => e.key === 'Escape' && onNo()
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onNo])
+  return (
+    <div className="overlay center" onClick={onNo}>
+      <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+        <div className="confirm-text">{text}</div>
+        <div className="confirm-actions">
+          <button className="btn-yes" onClick={() => { haptic('medium'); onYes() }}>Так</button>
+          <button className="btn-no" onClick={onNo}>Ні</button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -217,7 +453,10 @@ export function Sheet({ title, onClose, children }) {
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <h2>{title}</h2>
+        <div className="sheet-head">
+          <h2>{title}</h2>
+          <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
+        </div>
         {children}
       </div>
     </div>

@@ -156,8 +156,10 @@ html, body {
   border: none; border-radius: 9px; padding: 7px 12px;
   font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
   background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .btn-small.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn-small.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
 
 /* ---------- team ---------- */
 .member { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
@@ -193,11 +195,99 @@ html, body {
 .dictate button.rec { background: var(--red) !important; animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: 0.6; } }
 
+/* ---------- запис голосу: повноекранний оверлей ---------- */
+.record-overlay {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(29, 26, 22, 0.82);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px;
+}
+.record-overlay .mic-circle {
+  width: 96px; height: 96px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  animation: recpulse 1.3s infinite;
+}
+.record-overlay .mic-circle.stt { background: var(--muted); animation: pulse 1.2s infinite; }
+@keyframes recpulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.55); }
+  50% { box-shadow: 0 0 0 28px rgba(192, 57, 43, 0); }
+}
+.record-overlay .rec-time {
+  font-family: var(--mono); font-size: 30px; font-weight: 800;
+  color: #fff; letter-spacing: 2px;
+}
+.record-overlay .rec-hint { color: rgba(255, 255, 255, 0.75); font-size: 14.5px; }
+.record-overlay .btn-stop {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; color: var(--ink); border: none; border-radius: 999px;
+  padding: 14px 30px; font-size: 16px; font-weight: 800;
+  cursor: pointer; font-family: inherit; margin-top: 6px;
+}
+.record-overlay .btn-stop:active { transform: scale(0.97); }
+.record-overlay .stop-square {
+  width: 13px; height: 13px; border-radius: 3px; background: var(--red);
+}
+
+/* ---------- діалог підтвердження голосу ---------- */
+.sheet textarea {
+  width: 100%; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 13px 14px; font-size: 15px; font-family: inherit;
+  color: var(--ink); outline: none; min-height: 96px; resize: vertical;
+}
+.preview-meta {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+}
+.transcript-hint { font-size: 13px; color: var(--muted); }
+
+/* ---------- коментар до витрати ---------- */
+.comment-line {
+  display: flex; align-items: flex-start; gap: 5px;
+  font-size: 12.5px; font-weight: 500;
+  color: var(--orange); margin-top: 2px; white-space: normal;
+}
+.comment-line svg { flex-shrink: 0; margin-top: 1.5px; }
+
+/* іконка + текст в один рядок */
+.ico-text { display: inline-flex; align-items: center; gap: 5px; }
+
+/* кнопка підтвердження витрати */
+.btn-confirm {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: linear-gradient(135deg, #3a9a63, #2e7d4f);
+  color: #fff; border: none; border-radius: 999px;
+  padding: 8px 14px; font-size: 13px; font-weight: 700; font-family: inherit;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(46, 125, 79, 0.35);
+  white-space: nowrap; flex-shrink: 0;
+}
+.btn-confirm:active { transform: scale(0.95); box-shadow: 0 1px 4px rgba(46, 125, 79, 0.3); }
+.btn-confirm.wide { width: 100%; padding: 14px; font-size: 15px; border-radius: 14px; }
+
+/* міні-кнопка редагування (олівчик) */
+.btn-icon {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 4px; border-radius: 8px;
+  display: flex; align-items: center; flex-shrink: 0;
+}
+.btn-icon:active { color: var(--ink); transform: scale(0.92); }
+
 .toast {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
   background: var(--ink); color: #fff; font-size: 14px; font-weight: 600;
   border-radius: 12px; padding: 10px 16px; z-index: 50;
   max-width: 90%; text-align: center;
+}
+
+/* ---------- диктовка-док над таб-баром (owner) ---------- */
+.app.with-dock { padding-bottom: 152px; }
+.dictate-dock {
+  position: fixed; bottom: calc(64px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  padding: 8px 12px 6px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px);
+  z-index: 39;
 }
 
 /* ---------- tab bar ---------- */
@@ -229,11 +319,42 @@ html, body {
   display: flex; flex-direction: column; gap: 12px;
 }
 .sheet h2 { font-size: 18px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sheet-head h2 { flex: 1; min-width: 0; }
 .sheet input, .sheet select {
   width: 100%; background: var(--card); border: 1px solid var(--line);
   border-radius: 12px; padding: 13px 14px; font-size: 15px; font-family: inherit;
   color: var(--ink); outline: none;
 }
+
+/* ---------- грошове поле з ₴ ---------- */
+.money-input { display: flex; align-items: center; width: 100%; min-width: 0; }
+.money-input input { width: 100%; }
+.money-input.invalid input { border-color: var(--red); }
+
+/* ---------- секції бюджету ---------- */
+.budget-row { display: flex; gap: 8px; align-items: center; }
+.budget-row input:first-child { flex: 1; min-width: 0; }
+.budget-row .money-input { width: 132px; flex-shrink: 0; }
+
+/* ---------- центральне підтвердження Так/Ні ---------- */
+.overlay.center { align-items: center; padding: 24px; z-index: 80; }
+.confirm-box {
+  background: var(--bg); border-radius: 18px;
+  padding: 22px 18px 16px; width: 100%; max-width: 300px;
+  display: flex; flex-direction: column; gap: 16px;
+  box-shadow: 0 12px 40px rgba(29, 26, 22, 0.25);
+}
+.confirm-text { font-size: 16px; font-weight: 700; text-align: center; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-actions button {
+  flex: 1; border: none; border-radius: 12px; padding: 12px;
+  font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.confirm-actions button:active { transform: scale(0.96); }
+.btn-yes { background: var(--red); color: #fff; }
+.btn-no { background: transparent; color: var(--ink); border: 1px solid var(--line) !important; }
 
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 0; }
 .loading { text-align: center; color: var(--muted); padding: 48px 0; font-size: 14px; }
@@ -241,4 +362,80 @@ html, body {
 .back-btn {
   background: none; border: none; color: var(--orange); font-size: 15px; font-weight: 600;
   cursor: pointer; font-family: inherit; padding: 0; display: flex; align-items: center; gap: 4px;
+}
+
+/* ================= анімації ================= */
+
+/* поява елементів екрана каскадом (вкладки, дрілдауни, нові записи) */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.screen > * { animation: rise-in 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.screen > *:nth-child(2) { animation-delay: 0.03s; }
+.screen > *:nth-child(3) { animation-delay: 0.06s; }
+.screen > *:nth-child(4) { animation-delay: 0.09s; }
+.screen > *:nth-child(5) { animation-delay: 0.12s; }
+.screen > *:nth-child(6) { animation-delay: 0.15s; }
+.screen > *:nth-child(7) { animation-delay: 0.18s; }
+.screen > *:nth-child(8) { animation-delay: 0.21s; }
+.screen > *:nth-child(9) { animation-delay: 0.24s; }
+.screen > *:nth-child(10) { animation-delay: 0.27s; }
+.screen > *:nth-child(11) { animation-delay: 0.3s; }
+.screen > *:nth-child(n+12) { animation-delay: 0.33s; }
+
+/* шторка: затемнення + виїзд знизу */
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.overlay { animation: overlay-in 0.2s ease both; }
+@keyframes sheet-up {
+  from { opacity: 0.4; transform: translateY(48px); }
+  to { opacity: 1; transform: none; }
+}
+.sheet { animation: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+
+/* тост: поп знизу */
+@keyframes toast-pop {
+  from { opacity: 0; transform: translate(-50%, 10px) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.toast { animation: toast-pop 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+
+/* оверлей запису: плавна поява + масштаб кола */
+.record-overlay { animation: overlay-in 0.2s ease both; }
+@keyframes circle-in { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.record-overlay .mic-circle { animation: circle-in 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) both, recpulse 1.3s 0.25s infinite; }
+.record-overlay .mic-circle.stt { animation: circle-in 0.25s both, pulse 1.2s 0.25s infinite; }
+
+/* вкладки: підстрибування активної іконки */
+.tabbar button { transition: color 0.2s ease; }
+@keyframes tab-pop { 0% { transform: scale(1); } 45% { transform: scale(1.22); } 100% { transform: scale(1); } }
+.tabbar button.active svg { animation: tab-pop 0.3s cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+/* плавність дрібних взаємодій */
+.status-row, .item { transition: transform 0.12s ease, opacity 0.25s ease; }
+.status-row:active, .item:active { transform: scale(0.985); }
+.btn-primary, .btn-small, .btn-confirm, .btn-dashed, .btn-icon, .back-btn { transition: transform 0.12s ease, opacity 0.2s ease, box-shadow 0.15s ease; }
+.btn-dashed:active { transform: scale(0.985); }
+.btn-small:active { transform: scale(0.95); }
+
+/* бар темпу/бюджету наповнюється плавно */
+.meter .bar i { transition: width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1); }
+
+/* центральне підтвердження: поп з масштабом */
+@keyframes confirm-pop {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+.confirm-box { animation: confirm-pop 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+
+/* оверлеї/тости — без каскадної затримки списку */
+.screen > .overlay, .screen > .record-overlay, .screen > .toast { animation-delay: 0s; }
+
+/* поважаємо системне «менше руху» */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
 }

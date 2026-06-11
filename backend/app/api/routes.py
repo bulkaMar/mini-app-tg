@@ -2,15 +2,15 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..classifier import classify
 from ..config import settings
-from ..models import Expense, Message, Risk, Task, User
+from ..models import BudgetItem, Expense, Message, Risk, Task, User
 from ..services.notify import notify_owner
 from ..services.saver import parse_due, save_classified
-from ..services.status import ROLE_LABELS, compute_dashboard
+from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
 from .deps import allowed_categories, get_current_user, get_session, require_owner
 
@@ -133,6 +133,10 @@ async def update_task(
         raise HTTPException(status_code=404)
     if user.role != "owner" and task.category not in allowed_categories(user):
         raise HTTPException(status_code=403)
+    if isinstance(body.get("text"), str) and body["text"].strip():
+        task.text = body["text"].strip()
+    if "due" in body:
+        task.due = parse_due(body["due"])
     if body.get("status") in ("open", "done"):
         task.status = body["status"]
     if body.get("deleted"):
@@ -210,11 +214,12 @@ async def money(
             )
         )
     ).scalar_one()
-    budget_pct = round(spent / settings.monthly_budget * 100) if settings.monthly_budget else 0
+    budget = await monthly_budget(session)
+    budget_pct = round(spent / budget * 100) if budget else 0
 
     return {
         "spent": round(float(spent)),
-        "budget": settings.monthly_budget,
+        "budget": budget,
         "budget_pct": budget_pct,
         "can_approve": user.role == "owner" or bool((user.permissions or {}).get("approve_expenses")),
         "expenses": [
@@ -224,6 +229,8 @@ async def money(
                 "amount": e.amount,
                 "currency": e.currency,
                 "approved": e.approved,
+                "comment": e.comment or "",
+                "mine": e.telegram_id == user.telegram_id,
                 "owner_role": e.owner_role,
                 "time": e.created_at.isoformat() if e.created_at else None,
             }
@@ -250,6 +257,45 @@ async def create_expense(
     return {"id": e.id, "ok": True}
 
 
+@router.patch("/money/{expense_id}")
+async def update_expense(
+    expense_id: int,
+    body: dict,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Коментар до витрати (хто підтверджує або автор) і зміна approved (передумав — зняв OK)."""
+    e = (await session.execute(select(Expense).where(Expense.id == expense_id))).scalar_one_or_none()
+    if e is None or e.deleted_at is not None:
+        raise HTTPException(status_code=404)
+    can_approve = user.role == "owner" or bool((user.permissions or {}).get("approve_expenses"))
+    if "comment" in body:
+        if not (can_approve or e.telegram_id == user.telegram_id):
+            raise HTTPException(status_code=403, detail="comment not allowed")
+        e.comment = str(body["comment"] or "").strip()
+    if "amount" in body:
+        if not (can_approve or e.telegram_id == user.telegram_id):
+            raise HTTPException(status_code=403, detail="amount change not allowed")
+        try:
+            amount = float(body["amount"])
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="bad amount")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be > 0")
+        e.amount = amount
+    if isinstance(body.get("approved"), bool):
+        if not can_approve:
+            raise HTTPException(status_code=403, detail="approve not allowed")
+        e.approved = body["approved"]
+        e.approver_id = user.telegram_id if body["approved"] else None
+    if body.get("deleted"):
+        if not (can_approve or e.telegram_id == user.telegram_id):
+            raise HTTPException(status_code=403, detail="delete not allowed")
+        e.deleted_at = datetime.now(timezone.utc)
+    await session.commit()
+    return {"ok": True}
+
+
 @router.post("/money/{expense_id}/approve")
 async def approve_expense(
     expense_id: int,
@@ -265,6 +311,43 @@ async def approve_expense(
     e.approver_id = user.telegram_id
     await session.commit()
     return {"ok": True}
+
+
+# ---------- budget (owner) ----------
+
+class BudgetItemIn(BaseModel):
+    name: str
+    amount: float
+
+
+class BudgetIn(BaseModel):
+    items: list[BudgetItemIn]
+
+
+@router.get("/budget")
+async def get_budget(
+    user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
+) -> dict:
+    rows = (await session.execute(select(BudgetItem).order_by(BudgetItem.id.asc()))).scalars().all()
+    return {
+        "budget": await monthly_budget(session),
+        "items": [{"id": b.id, "name": b.name, "amount": b.amount} for b in rows],
+    }
+
+
+@router.put("/budget")
+async def set_budget(
+    body: BudgetIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Повністю замінює секції бюджету. Порожній список → бюджет з .env."""
+    await session.execute(delete(BudgetItem))
+    for it in body.items:
+        if it.name.strip() and it.amount > 0:
+            session.add(BudgetItem(name=it.name.strip(), amount=it.amount))
+    await session.commit()
+    return {"ok": True, "budget": await monthly_budget(session)}
 
 
 # ---------- team (owner) ----------
@@ -319,10 +402,24 @@ async def update_member(
     member = (await session.execute(select(User).where(User.id == member_id))).scalar_one_or_none()
     if member is None:
         raise HTTPException(status_code=404)
+    if member.role == "owner" and (body.get("role") or body.get("deleted")):
+        raise HTTPException(status_code=403, detail="cannot modify owner")
+    if isinstance(body.get("name"), str) and body["name"].strip():
+        member.name = body["name"].strip()
+    if isinstance(body.get("username"), str) and body["username"].strip():
+        new_username = body["username"].strip().lstrip("@")
+        # зміна тега в активного = заміна людини: відвʼязуємо старий акаунт,
+        # нова людина активується через /start у боті
+        if new_username != (member.username or "") and member.status == "active" and member.role != "owner":
+            member.telegram_id = None
+            member.status = "invited"
+        member.username = new_username
     if body.get("role") in ("manager", "assistant", "driver"):
         member.role = body["role"]
     if isinstance(body.get("permissions"), dict):
         member.permissions = body["permissions"]
+    if body.get("deleted"):
+        await session.delete(member)
     await session.commit()
     return {"ok": True}
 
@@ -347,6 +444,31 @@ async def ingest_text(
             f"{ROLE_LABELS.get(user.role, user.role)} ({user.name}):\n{c.text}"
         )
     return result
+
+
+@router.post("/ingest/voice/preview")
+async def ingest_voice_preview(
+    file: UploadFile,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Розшифровка + класифікація БЕЗ збереження — для діалогу підтвердження в Mini App."""
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="Голос вимкнено: на сервері не задано OPENAI_API_KEY")
+    audio = await file.read()
+    text = await transcribe(audio, filename=file.filename or "voice.webm")
+    if not text:
+        raise HTTPException(status_code=422, detail="Не вдалося розшифрувати голос — спробуй ще раз")
+    c = await classify(text, user.role)
+    return {
+        "transcript": text,
+        "text": c.text,
+        "type": c.type,
+        "category": c.category,
+        "amount": c.amount,
+        "currency": c.currency,
+        "due": c.due,
+        "risk_level": c.risk_level,
+    }
 
 
 @router.post("/ingest/voice")

@@ -79,9 +79,21 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(10), default="UAH")
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     approver_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    comment: Mapped[str] = mapped_column(Text, default="")  # напр. «наступного разу купи дешевше»
     owner_role: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class BudgetItem(Base):
+    """Секції бюджету місяця («на що» + сума). Сума секцій = бюджет; якщо порожньо — MONTHLY_BUDGET з .env."""
+
+    __tablename__ = "budget_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class DailySnapshot(Base):

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from '../api'
-import { CAT_LABEL, Dictate, Entry, Header, Icons, TabBar, fmtTime, useToast } from '../components'
+import { CAT_LABEL, Entry, Header, Icons, Sheet, TabBar, TaskSheet, fmtTime, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -41,7 +41,6 @@ function Project({ me }) {
         <Entry key={e.id} e={e}
           label={e.type === 'risk' ? undefined : e.type === 'money' ? 'ФІНАНСИ' : e.type === 'status' ? 'СТАТУС' : CAT_LABEL[e.category]} />
       ))}
-      <Dictate placeholder="Продиктуй звіт…" color="var(--blue)" onSaved={load} />
       {report && <ReportSheet onClose={() => { setReport(false); load() }} />}
     </div>
   )
@@ -99,7 +98,6 @@ function Risks() {
           </div>
         </div>
       ))}
-      <Dictate placeholder="Продиктуй тривогу…" color="var(--red)" onSaved={load} />
       {toast}
     </div>
   )
@@ -107,8 +105,22 @@ function Risks() {
 
 function Tasks() {
   const [tasks, setTasks] = useState(null)
+  const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [text, setText] = useState('')
+  const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([])), [])
   useEffect(() => { load() }, [load])
+
+  const add = async () => {
+    if (!text.trim()) return
+    try {
+      await post('/api/tasks', { category: 'production', text: text.trim() })
+      setAdding(false); setText('')
+      load()
+    } catch (e) { showToast(`⚠️ ${e.message}`) }
+  }
+
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   return (
@@ -116,14 +128,30 @@ function Tasks() {
       <Header icon="task" color="var(--blue)" title="Задачі" sub={`${open.length} відкриті`} />
       {open.length === 0 && <div className="empty">Відкритих задач немає</div>}
       {open.map((t) => (
-        <div key={t.id} className="item" style={{ cursor: 'default' }}>
+        <button key={t.id} className="item" onClick={() => setSel(t)}>
           <span className="dot warn" />
           <span className="ico">{Icons.film(19)}</span>
           <span className="grow">{t.text}</span>
           {t.due && <span className="tag warn">до {t.due.slice(5)}</span>}
-        </div>
+          <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
+        </button>
       ))}
-      <Dictate placeholder="Нова задача…" color="var(--blue)" onSaved={load} />
+      <button className="btn-dashed" style={{ color: 'var(--blue)' }} onClick={() => setAdding(true)}>
+        {Icons.plus(18)} Додати задачу
+      </button>
+      {adding && (
+        <Sheet title="Нова задача" onClose={() => setAdding(false)}>
+          <input placeholder="Напр.: підтвердити локацію на чт" value={text} autoFocus
+            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+          <button className="btn-primary" style={{ background: 'var(--blue)', opacity: text.trim() ? 1 : 0.45 }}
+            disabled={!text.trim()} onClick={add}>Зберегти</button>
+        </Sheet>
+      )}
+      {sel && (
+        <TaskSheet t={sel} color="var(--blue)" onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
+      {toast}
     </div>
   )
 }

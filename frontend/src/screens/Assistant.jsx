@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post } from '../api'
-import { Dictate, Header, Icons, Sheet, TabBar, useToast } from '../components'
+import { ExpenseSheet, Header, Icons, MoneyInput, Sheet, TabBar, TaskSheet, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -25,6 +25,7 @@ export default function Assistant({ me }) {
 function Life({ me, category }) {
   const [tasks, setTasks] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [sel, setSel] = useState(null)
   const [text, setText] = useState('')
   const [toast, showToast] = useToast()
 
@@ -43,14 +44,6 @@ function Life({ me, category }) {
     } catch (e) { showToast(`⚠️ ${e.message}`) }
   }
 
-  const toggle = async (t) => {
-    const next = t.status === 'open' ? 'done' : 'open'
-    try {
-      await patch(`/api/tasks/${t.id}`, { status: next })
-      setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)))
-    } catch { /* ignore */ }
-  }
-
   if (!tasks) return <div className="loading">Завантаження…</div>
   const isDog = category === 'dog'
   const open = tasks.filter((t) => t.status === 'open')
@@ -67,23 +60,27 @@ function Life({ me, category }) {
       <div className="section-label">Мої справи</div>
       {open.length === 0 && <div className="empty">Все зроблено 🎉</div>}
       {open.map((t) => (
-        <button key={t.id} className="item" onClick={() => toggle(t)}>
+        <button key={t.id} className="item" onClick={() => setSel(t)}>
           <span className="dot warn" />
           <span className="ico">{Icons[isDog ? 'dog' : 'home'](19)}</span>
           <span className="grow">{t.text}</span>
           <span className="tag warn">{t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}</span>
+          <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
       ))}
       {done.length > 0 && <div className="section-label">Зроблено</div>}
       {done.slice(0, 5).map((t) => (
-        <button key={t.id} className="item done" onClick={() => toggle(t)}>
+        <button key={t.id} className="item done" onClick={() => setSel(t)}>
           <span className="dot ok" />
           <span className="ico">{Icons.check(19)}</span>
           <span className="grow">{t.text}</span>
+          <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
       ))}
-      <Dictate placeholder="Продиктуй справу…" color="var(--green)" onSaved={load} />
-
+      {sel && (
+        <TaskSheet t={sel} color="var(--green)" onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
       {adding && (
         <Sheet title={isDog ? 'Нова справа про пса' : 'Нова справа'} onClose={() => setAdding(false)}>
           <input placeholder="Напр.: записати на хімчистку" value={text}
@@ -98,22 +95,62 @@ function Life({ me, category }) {
 
 function Money() {
   const [m, setM] = useState(null)
+  const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [text, setText] = useState('')
+  const [amount, setAmount] = useState('')
+  const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
   useEffect(() => { load() }, [load])
+
+  const add = async () => {
+    try {
+      await post('/api/money', { text: text.trim(), amount: Number(amount) })
+      setAdding(false); setText(''); setAmount('')
+      load()
+    } catch (e) { showToast(`⚠️ ${e.message}`) }
+  }
+
   if (!m) return <div className="loading">Завантаження…</div>
   return (
     <div className="screen">
       <Header icon="wallet" color="var(--green)" title="Фінанси" sub="побутові витрати" />
+      <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={() => setAdding(true)}>
+        {Icons.plus(20)} Додати витрату
+      </button>
       {m.expenses.length === 0 && <div className="empty">Витрат ще немає</div>}
       {m.expenses.map((e) => (
         <div key={e.id} className="item" style={{ cursor: 'default' }}>
           <span className={`dot ${e.approved ? 'ok' : 'warn'}`} />
           <span className="ico">{Icons.cart(19)}</span>
-          <span className="grow">{e.text || 'Витрата'}</span>
+          <span className="grow">
+            {e.text || 'Витрата'}
+            {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
+          </span>
           <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>
+          {(e.mine || m.can_approve) && (
+            <button className="btn-icon" aria-label="Редагувати" onClick={() => setSel(e)}>
+              {Icons.pencil(16)}
+            </button>
+          )}
         </div>
       ))}
-      <Dictate placeholder="Напр.: продукти 480 грн…" color="var(--green)" onSaved={load} />
+      {adding && (
+        <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
+          <input placeholder="На що (напр. Продукти)" value={text} autoFocus onChange={(e) => setText(e.target.value)} />
+          <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
+          <button className="btn-primary"
+            style={{ background: 'var(--green)', opacity: text.trim() && Number(amount) > 0 ? 1 : 0.45 }}
+            disabled={!text.trim() || !(Number(amount) > 0)} onClick={add}>
+            Зберегти
+          </button>
+        </Sheet>
+      )}
+      {sel && (
+        <ExpenseSheet e={sel} canApprove={m.can_approve} color="var(--green)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
+      )}
+      {toast}
     </div>
   )
 }

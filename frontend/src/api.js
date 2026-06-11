@@ -14,24 +14,27 @@ export async function api(path, options = {}) {
       : {}),
     ...options.headers,
   }
+  let res
   try {
-    const res = await fetch(BASE + path, { ...options, headers })
-    if (!res.ok) {
-      const detail = await res.json().catch(() => ({}))
-      throw new Error(detail.detail || `HTTP ${res.status}`)
-    }
-    return res.json()
+    res = await fetch(BASE + path, { ...options, headers })
   } catch (err) {
-    // бек не запущений або DEV_AUTH вимкнено → у дев-режимі показуємо мок-дані
+    // бек не запущений → у дев-режимі показуємо мок-дані (тільки коли немає звʼязку,
+    // справжні помилки бекенда (4xx/5xx) НЕ маскуємо)
     if (import.meta.env.DEV && !initData) {
       console.warn(`[mock] ${path}: ${err.message}`)
       return mockResponse(path)
     }
-    throw err
+    throw new Error('Немає звʼязку з сервером')
   }
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new Error(detail.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
 }
 
 export const get = (path) => api(path)
 export const post = (path, body) =>
   api(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) })
 export const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) })
+export const put = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) })

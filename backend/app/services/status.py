@@ -14,9 +14,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..models import Expense, Message, Risk, Task, User
+from ..models import BudgetItem, Expense, Message, Risk, Task, User
 
 ROLE_LABELS = {"owner": "власник", "manager": "менеджер", "assistant": "асистент", "driver": "водій"}
+
+
+async def monthly_budget(session: AsyncSession) -> float:
+    """Сума секцій бюджету; якщо секцій немає — MONTHLY_BUDGET з .env."""
+    total = (
+        await session.execute(select(func.coalesce(func.sum(BudgetItem.amount), 0.0)))
+    ).scalar_one()
+    return float(total) or settings.monthly_budget
 
 
 async def compute_dashboard(session: AsyncSession) -> dict:
@@ -49,7 +57,8 @@ async def compute_dashboard(session: AsyncSession) -> dict:
             )
         )
     ).scalar_one()
-    budget_pct = round(spent / settings.monthly_budget * 100) if settings.monthly_budget else 0
+    budget = await monthly_budget(session)
+    budget_pct = round(spent / budget * 100) if budget else 0
 
     life_open = by_cat.get("life", 0) + by_cat.get("dog", 0)
 
@@ -94,7 +103,7 @@ async def compute_dashboard(session: AsyncSession) -> dict:
             "production_open": by_cat.get("production", 0),
             "risk_active": risk_count,
             "spent": round(float(spent)),
-            "budget": settings.monthly_budget,
+            "budget": budget,
             "budget_pct": budget_pct,
         },
         "load": load,
