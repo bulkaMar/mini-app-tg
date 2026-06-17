@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post } from '../api'
-import { ExpenseSheet, Header, Icons, MoneyInput, Sheet, TabBar, TaskSheet, useToast } from '../components'
+import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
   return (
     <div className="app">
+      <NotificationBell me={me} />
       {tab === 'life' && <Life me={me} category="life" />}
       {tab === 'dog' && <Life me={me} category="dog" />}
       {tab === 'money' && <Money />}

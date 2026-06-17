@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CAT_LABEL, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, fmtTime, useToast,
+  CAT_LABEL, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
 const STATUS_TEXT = { ok: 'в нормі', warn: 'потребує уваги', crit: 'критично' }
 
-export default function Owner() {
+export default function Owner({ me }) {
   const [tab, setTab] = useState('home')
   const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
   const [refreshKey, setRefreshKey] = useState(0) // після диктовки перезавантажуємо активний екран
@@ -25,6 +25,7 @@ export default function Owner() {
 
   return (
     <div className="app with-dock">
+      <NotificationBell me={me} />
       <div key={refreshKey}>{screen}</div>
       <div className="dictate-dock">
         <Dictate onSaved={() => setRefreshKey((k) => k + 1)} />
@@ -47,7 +48,7 @@ export default function Owner() {
 function Home({ openView }) {
   const [d, setD] = useState(null)
   const load = useCallback(() => get('/api/dashboard').then(setD).catch(() => {}), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   if (!d) return <div className="loading">Завантаження…</div>
   const { statuses: s, counts: c } = d
@@ -63,8 +64,7 @@ function Home({ openView }) {
 
   return (
     <div className="screen">
-      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`}
-        right={<span style={{ color: 'var(--muted)' }}>{Icons.bell(22)}</span>} />
+      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`} />
 
       {rows.map((r) => (
         <button key={r.key} className="status-row" onClick={() => openView(r.view)}>
@@ -93,7 +93,8 @@ function Home({ openView }) {
 /* ---------- Потік ---------- */
 function Flow() {
   const [feed, setFeed] = useState(null)
-  useEffect(() => { get('/api/feed').then(setFeed).catch(() => setFeed([])) }, [])
+  const load = useCallback(() => get('/api/feed').then(setFeed).catch(() => setFeed([])), [])
+  usePoll(load)
   if (!feed) return <div className="loading">Завантаження…</div>
   return (
     <div className="screen">

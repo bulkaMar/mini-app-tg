@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from '../api'
-import { CAT_LABEL, Entry, Header, Icons, Sheet, TabBar, TaskSheet, fmtTime, useToast } from '../components'
+import { CAT_LABEL, Entry, Header, Icons, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
   return (
     <div className="app">
+      <NotificationBell me={me} />
       {tab === 'project' && <Project me={me} />}
       {tab === 'risks' && <Risks />}
       {tab === 'tasks' && <Tasks />}
@@ -26,7 +27,7 @@ function Project({ me }) {
   const [feed, setFeed] = useState(null)
   const [report, setReport] = useState(false)
   const load = useCallback(() => get('/api/feed').then(setFeed).catch(() => setFeed([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   if (!feed) return <div className="loading">Завантаження…</div>
   return (

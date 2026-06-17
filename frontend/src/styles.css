@@ -431,6 +431,46 @@ html, body {
 /* оверлеї/тости — без каскадної затримки списку */
 .screen > .overlay, .screen > .record-overlay, .screen > .toast { animation-delay: 0s; }
 
+/* ---------- дзвіночок сповіщень (фіксований, зверху-справа) ---------- */
+.notif-wrap {
+  position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 480px;
+  display: flex; justify-content: flex-end;
+  padding: 14px 14px 0;
+  z-index: 35; pointer-events: none; /* тапи проходять крізь порожнечу — лише кнопка клікабельна */
+}
+.notif-bell {
+  position: relative; pointer-events: auto;
+  width: 42px; height: 42px; border-radius: 13px;
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line); color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-family: inherit;
+  transition: transform 0.12s ease, color 0.2s ease;
+}
+.notif-bell:active { transform: scale(0.92); }
+.notif-bell.has-new { color: var(--orange); }
+.notif-bell.has-new svg { transform-origin: 50% 4px; animation: bell-ring 2.4s ease-in-out infinite; }
+@keyframes bell-ring {
+  0%, 86%, 100% { transform: rotate(0); }
+  88% { transform: rotate(12deg); }
+  90% { transform: rotate(-10deg); }
+  92% { transform: rotate(7deg); }
+  94% { transform: rotate(-5deg); }
+  96% { transform: rotate(3deg); }
+}
+.notif-badge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px; background: var(--red); color: #fff;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--bg);
+  animation: badge-pop 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes badge-pop { from { transform: scale(0); } to { transform: scale(1); } }
+
 /* поважаємо системне «менше руху» */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

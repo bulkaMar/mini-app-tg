@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from '../api'
-import { ExpenseSheet, Header, Icons, MoneyInput, Sheet, TabBar, TaskSheet, fmtTime, useToast } from '../components'
+import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, useToast } from '../components'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
   return (
     <div className="app">
+      <NotificationBell me={me} />
       {tab === 'shift' && <Shift me={me} />}
       {tab === 'trips' && <Trips />}
       {tab === 'money' && <Money />}

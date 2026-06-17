@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { patch, post } from './api'
+import { get, patch, post } from './api'
 import { haptic } from './telegram'
 
 /* ---------- іконки (інлайн SVG, stroke 1.8) ---------- */
@@ -126,6 +126,20 @@ export function useToast() {
   }
   const node = msg ? <div className="toast">{msg}</div> : null
   return [node, show]
+}
+
+/* ---------- авто-оновлення екрана: одразу + кожні ms + при поверненні фокуса ----------
+   щоб надходження від інших зʼявлялись самі, без перезавантаження сторінки (як дзвіночок) */
+export function usePoll(fn, ms = 15000) {
+  const ref = useRef(fn)
+  ref.current = fn
+  useEffect(() => {
+    ref.current()
+    const timer = setInterval(() => ref.current(), ms)
+    const onFocus = () => ref.current()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus) }
+  }, [ms])
 }
 
 /* ---------- диктування: текст + мікрофон → прев'ю → /api/ingest ---------- */
@@ -460,5 +474,83 @@ export function Sheet({ title, onClose, children }) {
         {children}
       </div>
     </div>
+  )
+}
+
+/* ---------- дзвіночок: лічильник нових надходжень у стрічці ---------- */
+// Єдине джерело — /api/feed (бек уже фільтрує за роллю). Рахуємо записи, що
+// зʼявились після «востаннє бачених» і не від самого користувача; позначку
+// тримаємо в localStorage, опитуємо стрічку раз на 15 с і при поверненні фокуса.
+const FEED_POLL_MS = 15000
+const feedLabel = (e) =>
+  `${e.role_label?.toUpperCase() || ''}${CAT_LABEL[e.category] ? ' · ' + CAT_LABEL[e.category] : ''}`
+
+export function NotificationBell({ me }) {
+  const storeKey = `pult:feedSeen:${me?.telegram_id ?? 'x'}`
+  const [feed, setFeed] = useState([])
+  const [seen, setSeen] = useState(() => {
+    const v = Number(localStorage.getItem(storeKey))
+    return localStorage.getItem(storeKey) !== null && Number.isFinite(v) ? v : null // null = ще не ініціалізовано
+  })
+  const [open, setOpen] = useState(false)
+  const [shown, setShown] = useState([]) // знімок «нових» на момент відкриття шторки
+  const seenRef = useRef(seen)
+  seenRef.current = seen
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const f = await get('/api/feed')
+        if (!alive || !Array.isArray(f)) return
+        setFeed(f)
+        // перший запуск: усе наявне вважаємо переглянутим — горить лише те, що прийде далі
+        if (seenRef.current === null) {
+          const maxId = f.reduce((m, e) => Math.max(m, e.id), 0)
+          localStorage.setItem(storeKey, String(maxId))
+          setSeen(maxId)
+        }
+      } catch { /* бек недоступний — мовчки, дзвіночок просто не горить */ }
+    }
+    load()
+    const timer = setInterval(load, FEED_POLL_MS)
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('focus', onFocus) }
+  }, [storeKey])
+
+  const base = seen === null ? Infinity : seen // поки позначку не зчитано — нічого не «нове»
+  const fresh = feed.filter((e) => e.id > base && e.role !== me?.role)
+  const count = fresh.length
+  const earlier = feed.filter((e) => !shown.some((s) => s.id === e.id)).slice(0, 12)
+
+  const openSheet = () => {
+    haptic()
+    setShown(fresh)
+    const maxId = feed.reduce((m, e) => Math.max(m, e.id), seen ?? 0)
+    localStorage.setItem(storeKey, String(maxId))
+    setSeen(maxId)
+    setOpen(true)
+  }
+
+  return (
+    <>
+      <div className="notif-wrap">
+        <button className={`notif-bell ${count ? 'has-new' : ''}`} onClick={openSheet}
+          aria-label={count ? `Сповіщення: ${count} нових` : 'Сповіщення'}>
+          {Icons.bell(22)}
+          {count > 0 && <span className="notif-badge">{count > 9 ? '9+' : count}</span>}
+        </button>
+      </div>
+      {open && (
+        <Sheet title="Сповіщення" onClose={() => setOpen(false)}>
+          {shown.length > 0 && <div className="section-label">Нове</div>}
+          {shown.map((e) => <Entry key={e.id} e={e} label={feedLabel(e)} />)}
+          {earlier.length > 0 && <div className="section-label">{shown.length > 0 ? 'Раніше' : 'Стрічка'}</div>}
+          {earlier.map((e) => <Entry key={e.id} e={e} label={feedLabel(e)} />)}
+          {feed.length === 0 && <div className="empty">Поки тихо</div>}
+        </Sheet>
+      )}
+    </>
   )
 }
