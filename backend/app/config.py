@@ -1,6 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -13,13 +16,39 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./pult.db"
 
     owner_telegram_id: int = 0
-    allowed_user_ids: list[int] = []
+    # NoDecode: не даємо pydantic JSON-парсити env — розбираємо самі (нижче)
+    allowed_user_ids: Annotated[list[int], NoDecode] = []
 
     claude_model: str = "claude-opus-4-8"
     monthly_budget: float = 17000.0
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
     init_data_max_age: int = 86400  # сек, свіжість auth_date
     dev_auth: bool = False  # ТІЛЬКИ ДЕВ: пускати запити без initData з роллю з X-Dev-Role
+
+    @field_validator("database_url")
+    @classmethod
+    def _async_driver(cls, v: str) -> str:
+        """Railway/Heroku дають postgresql://… — додаємо async-драйвер для SQLAlchemy."""
+        if v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgres://"):  # старий формат Heroku
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("allowed_user_ids", "cors_origins", mode="before")
+    @classmethod
+    def _split_list(cls, v):
+        """Приймає і JSON-список ["a","b"], і простий рядок через кому a, b."""
+        if v is None:
+            return []
+        if not isinstance(v, str):
+            return v  # уже список (дефолт)
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("["):
+            return json.loads(s)
+        return [item.strip() for item in s.split(",") if item.strip()]
 
 
 @lru_cache
