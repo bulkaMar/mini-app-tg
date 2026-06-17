@@ -21,6 +21,8 @@ app = FastAPI(title="PULT API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins + [settings.webapp_url],
+    # будь-який домен проєкту на Vercel (прод + усі прев'ю-адреси -<хеш>-...vercel.app)
+    allow_origin_regex=r"https://mini-app-tg[a-z0-9-]*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
