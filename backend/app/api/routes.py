@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..classifier import classify
+from ..classifier import Classification, classify, plan_tasks
 from ..config import settings
 from ..models import BudgetItem, Expense, Message, Risk, Task, User
 from ..services.notify import route_notifications
-from ..services.saver import parse_due, save_classified
+from ..services.saver import parse_due, save_classified, save_owner_task
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
 from .auth import InitDataError, validate_init_data
@@ -525,3 +525,74 @@ async def ingest_voice(
     await route_notifications(session, user, c)
     result["transcript"] = text
     return result
+
+
+# ---------- роздача задач: диктовка власниці → список справ із виконавцями ----------
+# Вікно «Перевір і роздай» у Mini App. БЕЗ збереження на кроці плану — лише розкладка.
+
+
+class PlanIn(BaseModel):
+    text: str
+
+
+class PlannedTaskIn(BaseModel):
+    text: str
+    assignee: str = "me"
+    category: str | None = None
+
+
+class TasksIn(BaseModel):
+    tasks: list[PlannedTaskIn]
+
+
+def _plan_payload(transcript: str, tasks) -> dict:
+    return {
+        "transcript": transcript,
+        "tasks": [{"text": t.text, "assignee": t.assignee, "category": t.category} for t in tasks],
+    }
+
+
+@router.post("/ingest/plan")
+async def ingest_plan(body: PlanIn, user: User = Depends(require_owner)) -> dict:
+    """Текст → список задач із підказкою виконавця (без збереження)."""
+    tasks = await plan_tasks(body.text)
+    return _plan_payload(body.text, tasks)
+
+
+@router.post("/ingest/voice/plan")
+async def ingest_voice_plan(
+    file: UploadFile, user: User = Depends(require_owner)
+) -> dict:
+    """Голос → розшифровка → список задач (без збереження)."""
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=503, detail="Голос вимкнено: на сервері не задано OPENAI_API_KEY")
+    audio = await file.read()
+    text = await transcribe(audio, filename=file.filename or "voice.webm")
+    if not text:
+        raise HTTPException(status_code=422, detail="Не вдалося розшифрувати голос — спробуй ще раз")
+    tasks = await plan_tasks(text)
+    return _plan_payload(text, tasks)
+
+
+@router.post("/ingest/tasks")
+async def ingest_tasks(
+    body: TasksIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Зберігає роздані задачі пачкою + штовхає пуш кожному виконавцю (крім «я»)."""
+    saved = []
+    for t in body.tasks:
+        if not t.text.strip():
+            continue
+        assignee = t.assignee if t.assignee in ("me", "manager", "assistant", "driver") else "me"
+        saved.append(await save_owner_task(session, user, t.text.strip(), assignee, t.category))
+    await session.commit()
+
+    for s in saved:
+        if s["assignee"] == "me":
+            continue
+        c = Classification(type="task", category=s["category"], text=s["text"], owner=s["assignee"])
+        await route_notifications(session, user, c)
+
+    return {"count": len(saved)}

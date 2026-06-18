@@ -65,5 +65,15 @@ export function mockResponse(path) {
   if (clean === '/api/ingest') return { type: 'task', category: 'life', text: 'Демо-запис збережено' }
   if (clean === '/api/ingest/voice/preview')
     return { transcript: 'Ну, тут це, треба купити корм псу, ну, десь до завтра', text: 'Купити корм псу до завтра', type: 'task', category: 'dog' }
+  if (clean === '/api/ingest/plan' || clean === '/api/ingest/voice/plan')
+    return {
+      transcript: 'Ну треба купити корм псу, і домовитись за поїздку на завтра, і нагадати менеджеру про монтаж',
+      tasks: [
+        { text: 'купити корм псу', assignee: 'assistant', category: 'dog' },
+        { text: 'домовитись за поїздку на завтра', assignee: 'driver', category: 'logistics' },
+        { text: 'нагадати про монтаж', assignee: 'manager', category: 'production' },
+      ],
+    }
+  if (clean === '/api/ingest/tasks') return { count: 2 }
   return { ok: true }
 }

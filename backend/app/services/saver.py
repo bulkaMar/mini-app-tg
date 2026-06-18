@@ -75,3 +75,54 @@ async def save_classified(
 
     await session.commit()
     return {"type": c.type, "category": c.category, "text": c.text, "record_id": record_id}
+
+
+# ---------- збереження задач, які власниця роздає команді ----------
+# Виконавець (assignee) визначає і роль, і категорію — щоб людина точно побачила задачу
+# у своєму екрані (категорія = те, що дозволено цій ролі бачити).
+
+ASSIGNEE_TO_ROLE = {"me": "owner", "manager": "manager", "assistant": "assistant", "driver": "driver"}
+ASSIGNEE_TO_CATEGORY = {"manager": "production", "assistant": "life", "driver": "logistics"}
+
+
+def resolve_assignee_category(assignee: str, suggested: str | None) -> str:
+    """Категорія за виконавцем. Для власниці лишаємо підказану AI (вона бачить усе);
+    для асистента поважаємо «dog»; для решти — жорстко за роллю."""
+    if assignee == "me":
+        return suggested if suggested in ("production", "life", "dog", "logistics") else "life"
+    if assignee == "assistant":
+        return "dog" if suggested == "dog" else "life"
+    return ASSIGNEE_TO_CATEGORY.get(assignee, "life")
+
+
+async def save_owner_task(
+    session: AsyncSession,
+    owner: User,
+    text: str,
+    assignee: str,
+    suggested_category: str | None = None,
+) -> dict:
+    """Створює задачу, роздану власницею на конкретну роль (+ лог у messages для стрічки).
+    Без commit — викликач комітить пачку разом."""
+    role = ASSIGNEE_TO_ROLE.get(assignee, "owner")
+    category = resolve_assignee_category(assignee, suggested_category)
+
+    session.add(
+        Message(
+            telegram_id=owner.telegram_id,
+            sender_role=owner.role,
+            raw_text=text,
+            clean_text=text,
+            classified_type="task",
+            category=category,
+        )
+    )
+    task = Task(
+        telegram_id=owner.telegram_id,
+        category=category,
+        text=text,
+        owner_role=role,
+    )
+    session.add(task)
+    await session.flush()
+    return {"id": task.id, "assignee": assignee, "category": category, "text": text}

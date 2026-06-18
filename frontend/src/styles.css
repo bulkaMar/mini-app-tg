@@ -356,11 +356,18 @@ html, body {
 .swipe-row.out { opacity: 0; max-height: 0; margin-top: -12px; transition: opacity .2s ease, max-height .25s ease, margin-top .25s ease; }
 .swipe-del {
   position: absolute; top: 0; right: 0; height: 100%; width: 92px;
-  border: none; cursor: pointer; background: var(--red); color: #fff;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  font-size: 13px; font-weight: 700; font-family: inherit;
+  border: none; cursor: pointer; background: transparent; font-family: inherit;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
 }
-.swipe-del:active { filter: brightness(0.92); }
+.swipe-del-circle {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(192, 57, 43, 0.35);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.swipe-del-label { font-size: 11px; font-weight: 600; color: var(--muted); }
+.swipe-del:active .swipe-del-circle { filter: brightness(0.92); transform: scale(0.94); }
 /* фон під карткою — як у шторці, щоб кнопка не визирала з-під заокруглених кутів */
 .swipe-fg { position: relative; background: var(--bg); touch-action: pan-y; } /* вертикальний скрол — нативний, горизонталь ловимо самі */
 .sheet-head h2 { flex: 1; min-width: 0; }
@@ -398,6 +405,57 @@ html, body {
 .confirm-actions button:active { transform: scale(0.96); }
 .btn-yes { background: var(--red); color: #fff; }
 .btn-no { background: transparent; color: var(--ink); border: 1px solid var(--line) !important; }
+
+/* ---------- центральне вікно «Перевір і роздай» ---------- */
+.overlay.plan {
+  align-items: center; justify-content: center;
+  padding: 20px; z-index: 80;
+  background: rgba(29, 26, 22, 0.6); /* темніше — фон чітко відступає назад */
+}
+.plan-modal {
+  background: var(--bg); border-radius: 20px;
+  width: 100%; max-width: 440px; max-height: 85dvh;
+  padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 16px 48px rgba(29, 26, 22, 0.3);
+  animation: confirm-pop 0.24s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.plan-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.plan-head h2 { font-size: 18px; }
+.plan-cols {
+  display: flex; gap: 8px;
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+  padding: 0 2px;
+}
+.plan-cols .c1 { flex: 1; }
+.plan-cols .c2 { width: 142px; flex-shrink: 0; }
+.plan-list {
+  flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; /* скрол не «протікає» на фон */
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 0 -4px; padding: 2px 4px;
+}
+.plan-row { display: flex; gap: 8px; align-items: center; }
+.plan-text {
+  flex: 1; min-width: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 13px; font-size: 15px; font-family: inherit; color: var(--ink); outline: none;
+}
+.plan-who {
+  width: 104px; flex-shrink: 0;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 10px; font-size: 14px; font-weight: 600; font-family: inherit;
+  color: var(--ink); outline: none; cursor: pointer;
+}
+.plan-del {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border: none; background: transparent; color: var(--muted);
+  border-radius: 9px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.12s ease, color 0.15s ease;
+}
+.plan-del:active { transform: scale(0.9); color: var(--red); }
 
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 0; }
 .loading { text-align: center; color: var(--muted); padding: 48px 0; font-size: 14px; }

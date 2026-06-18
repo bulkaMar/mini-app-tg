@@ -131,7 +131,8 @@ export function SwipeRow({ onDelete, children }) {
   return (
     <div className={`swipe-row ${out ? 'out' : ''}`}>
       <button className="swipe-del" onClick={del} tabIndex={openDel ? 0 : -1} aria-hidden={!openDel}>
-        {Icons.trash(17)} Видалити
+        <span className="swipe-del-circle">{Icons.trash(20)}</span>
+        <span className="swipe-del-label">Видалити</span>
       </button>
       <div
         className="swipe-fg"
@@ -222,34 +223,135 @@ export function usePoll(fn, ms = 30000) {
   }, [ms])
 }
 
-/* ---------- диктування: текст + мікрофон → прев'ю → /api/ingest ---------- */
+/* ---------- блокування фону: поки відкрите центральне вікно, сторінка не гортається ---------- */
+function useLockScroll() {
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+}
+
+/* варіанти виконавців для колонки «Кому» */
+const ASSIGNEES = [
+  { value: 'me', label: 'Я' },
+  { value: 'manager', label: 'Менеджер' },
+  { value: 'assistant', label: 'Асистент' },
+  { value: 'driver', label: 'Водій' },
+]
+
+/* ---------- центральне вікно «Перевір і роздай»: список справ + кому ----------
+   Одна диктовка ділиться на кілька задач; текст і виконавця можна змінити. */
+export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved }) {
+  const [rows, setRows] = useState(() => {
+    const src = plan?.tasks?.length ? plan.tasks : [{ text: plan?.transcript || '', assignee: 'me', category: null }]
+    return src.map((t, i) => ({
+      rid: i,
+      text: t.text || '',
+      assignee: ASSIGNEES.some((a) => a.value === t.assignee) ? t.assignee : 'me',
+      category: t.category || null,
+    }))
+  })
+  const [busy, setBusy] = useState(false)
+  const [toast, showToast] = useToast()
+  useLockScroll()
+
+  const setText = (rid, v) => setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, text: v } : r)))
+  const setWho = (rid, v) => { haptic(); setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, assignee: v } : r))) }
+  const removeRow = (rid) => { haptic(); setRows((rs) => rs.filter((r) => r.rid !== rid)) }
+
+  const valid = rows.filter((r) => r.text.trim())
+
+  const save = async () => {
+    if (!valid.length || busy) return
+    setBusy(true)
+    try {
+      const r = await post('/api/ingest/tasks', {
+        tasks: valid.map((r) => ({ text: r.text.trim(), assignee: r.assignee, category: r.category })),
+      })
+      haptic('medium')
+      onSaved?.(r, valid.length)
+    } catch (err) {
+      showToast(err.message, 'warn')
+      setBusy(false)
+    }
+  }
+
+  return createPortal(
+    <div className="overlay plan" onClick={onClose}>
+      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="plan-head">
+          <h2>Перевір і роздай</h2>
+          <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
+        </div>
+        <div className="plan-cols">
+          <span className="c1">Справа</span>
+          <span className="c2">Кому</span>
+        </div>
+        <div className="plan-list">
+          {rows.map((r) => (
+            <div className="plan-row" key={r.rid}>
+              <input
+                className="plan-text"
+                value={r.text}
+                placeholder="Текст справи"
+                onChange={(e) => setText(r.rid, e.target.value)}
+              />
+              <select className="plan-who" value={r.assignee} onChange={(e) => setWho(r.rid, e.target.value)}>
+                {ASSIGNEES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+              </select>
+              {rows.length > 1 && (
+                <button className="plan-del" aria-label="Прибрати справу" onClick={() => removeRow(r.rid)}>
+                  {Icons.close(16)}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        {plan?.transcript && (
+          <div className="transcript-hint">Почув: «{plan.transcript}»</div>
+        )}
+        <button className="btn-primary" style={{ background: color }} onClick={save} disabled={busy || !valid.length}>
+          {Icons.check(18)} {busy ? 'Зберігаю…' : `Роздати${valid.length > 1 ? ` (${valid.length})` : ''}`}
+        </button>
+        {toast}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/* ---------- диктування: текст + мікрофон → «Перевір і роздай» → /api/ingest/tasks ---------- */
 export function Dictate({ placeholder = 'Продиктуй або напиши…', color = 'var(--orange)', onSaved }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [phase, setPhase] = useState(null) // null | 'rec' (запис) | 'stt' (розшифровка)
   const [seconds, setSeconds] = useState(0)
-  const [preview, setPreview] = useState(null) // відповідь /ingest/voice/preview
-  const [draft, setDraft] = useState('') // редагований текст у діалозі
+  const [plan, setPlan] = useState(null) // {transcript, tasks} → центральне вікно
   const recRef = useRef(null)
   const timerRef = useRef(null)
   const [toast, showToast] = useToast()
 
   useEffect(() => () => clearInterval(timerRef.current), [])
 
-  const save = async (t) => {
+  const planFromText = async (t) => {
     if (!t.trim() || busy) return
     setBusy(true)
     try {
-      const r = await post('/api/ingest', { text: t.trim() })
+      const r = await post('/api/ingest/plan', { text: t.trim() })
       setText('')
-      setPreview(null)
-      showToast(`${TYPE_LABEL[r.type] || 'Запис'} · ${CAT_LABEL[r.category] || ''} — збережено`, 'ok')
-      onSaved?.(r)
+      setPlan(r)
     } catch (err) {
       showToast(err.message, 'warn')
     } finally {
       setBusy(false)
     }
+  }
+
+  const onSavedTasks = (r, n) => {
+    setPlan(null)
+    showToast(`Роздано задач: ${r?.count ?? n}`, 'ok')
+    onSaved?.(r)
   }
 
   const startRecord = async () => {
@@ -270,9 +372,8 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
           const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
           const fd = new FormData()
           fd.append('file', blob, 'voice.webm')
-          const r = await post('/api/ingest/voice/preview', fd)
-          setPreview(r)
-          setDraft(r.text || r.transcript || '')
+          const r = await post('/api/ingest/voice/plan', fd)
+          setPlan(r)
         } catch (err) {
           showToast(err.message, 'warn')
         } finally {
@@ -304,14 +405,14 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
           value={text}
           placeholder={placeholder}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && save(text)}
+          onKeyDown={(e) => e.key === 'Enter' && planFromText(text)}
           disabled={busy || phase !== null}
         />
         <button
           style={{ background: color }}
-          onClick={text.trim() ? () => save(text) : startRecord}
+          onClick={text.trim() ? () => planFromText(text) : startRecord}
           disabled={busy || phase !== null}
-          aria-label={text.trim() ? 'Надіслати' : 'Диктувати'}
+          aria-label={text.trim() ? 'Розкласти' : 'Диктувати'}
         >
           {text.trim() ? Icons.send(20) : Icons.mic(20)}
         </button>
@@ -341,31 +442,9 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
         document.body,
       )}
 
-      {/* діалог підтвердження: відфільтрований текст можна підправити */}
-      {preview && (
-        <Sheet title="Перевір запис" onClose={() => setPreview(null)}>
-          <div className="preview-meta">
-            {TYPE_LABEL[preview.type] || 'ЗАПИС'} · {CAT_LABEL[preview.category] || ''}
-            {preview.amount ? ` · ${preview.amount} ${preview.currency || '₴'}` : ''}
-            {preview.due ? ` · до ${preview.due}` : ''}
-          </div>
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={4}
-            autoFocus
-          />
-          {preview.transcript && preview.transcript !== draft && (
-            <div className="transcript-hint">Почув: «{preview.transcript}»</div>
-          )}
-          <button className="btn-primary" style={{ background: color }}
-            onClick={() => save(draft)} disabled={busy || !draft.trim()}>
-            {Icons.send(18)} {busy ? 'Зберігаю…' : 'Відправити'}
-          </button>
-          <button className="btn-small ghost" onClick={() => setPreview(null)} disabled={busy}>
-            Скасувати
-          </button>
-        </Sheet>
+      {/* центральне вікно «Перевір і роздай» */}
+      {plan && (
+        <TaskPlanModal plan={plan} color={color} onClose={() => setPlan(null)} onSaved={onSavedTasks} />
       )}
       {toast}
     </>

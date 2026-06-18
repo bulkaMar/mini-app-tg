@@ -104,3 +104,59 @@ async def classify(raw_text: str, sender_role: str) -> Classification:
         elif result.risk_level is None:
             result.risk_level = "high"
     return result
+
+
+# ---------- розкладка диктовки власниці на окремі задачі ----------
+# Власниця диктує перелік доручень → ділимо на окремі справи, кожній підказуємо виконавця.
+
+
+class PlannedTask(BaseModel):
+    text: str  # коротке чисте формулювання справи
+    assignee: Literal["me", "manager", "assistant", "driver"] = "me"
+    category: Literal["production", "life", "dog", "logistics"] = "life"
+
+
+class TaskPlan(BaseModel):
+    tasks: list[PlannedTask]
+
+
+PLAN_SYSTEM_PROMPT = """Ти — диспетчер власниці продакшн-команди. Власниця диктує \
+перелік доручень (укр/рос/суржик, з голосу, зі словами-паразитами). Розклади це на ОКРЕМІ задачі.
+
+Для кожної задачі:
+- text: коротке чисте формулювання справи у формі доручення, без води та слів-паразитів, \
+мовою оригіналу (напр. «купити корм», «домовитись за поїздку»)
+- assignee: кому доручити:
+    me — власниця робить сама
+    manager — зйомки, проєкти, контракти, продакшн
+    assistant — побут, особисте, дім, здоровʼя, собака
+    driver — поїздки, подачі авто, паливо, логістика
+- category: production | life | dog | logistics — напрям задачі (dog лише якщо саме про собаку)
+
+Правила:
+- якщо в диктовці кілька різних справ — поверни кілька елементів
+- якщо доручення одне — поверни рівно один елемент
+- не вигадуй задач, яких немає в тексті; нічого не пропускай"""
+
+
+async def plan_tasks(raw_text: str) -> list[PlannedTask]:
+    """Ділить диктовку на список задач із підказкою виконавця.
+    Без Claude (або при помилці) — повертає весь текст однією задачею на власницю."""
+    if settings.anthropic_api_key:
+        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        for attempt in range(2):
+            try:
+                response = await client.messages.parse(
+                    model=settings.claude_model,
+                    max_tokens=1024,
+                    system=PLAN_SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": raw_text}],
+                    output_format=TaskPlan,
+                )
+                plan = response.parsed_output
+                if plan is not None and plan.tasks:
+                    return plan.tasks
+            except Exception:
+                log.exception("plan_tasks LLM call failed (attempt %s)", attempt + 1)
+
+    return [PlannedTask(text=raw_text.strip(), assignee="me", category="life")]
