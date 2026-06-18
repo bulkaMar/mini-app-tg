@@ -39,6 +39,46 @@ async def _get_dev_user(session, role: str) -> "User":
         await session.commit()
     return user
 
+async def _provision_user(session, tg_id: int, tg_user: dict) -> "User | None":
+    """Створює owner/allowed-користувача або активує інвайт за username.
+
+    Дзеркало WhitelistMiddleware: дозволяє входити через Mini App без попереднього
+    звернення до бота. Повертає None, якщо tg_id не у whitelist і немає інвайту.
+    """
+    username = tg_user.get("username")
+    full_name = (
+        " ".join(p for p in (tg_user.get("first_name"), tg_user.get("last_name")) if p)
+        or username
+        or ""
+    )
+
+    if tg_id == settings.owner_telegram_id or tg_id in settings.allowed_user_ids:
+        user = User(
+            telegram_id=tg_id,
+            name=full_name,
+            username=username,
+            role="owner" if tg_id == settings.owner_telegram_id else "assistant",
+            status="active",
+        )
+        session.add(user)
+        await session.commit()
+        return user
+
+    if username:  # запрошений власником член команди — активуємо за username
+        invited = (
+            await session.execute(
+                select(User).where(User.username == username, User.status == "invited")
+            )
+        ).scalar_one_or_none()
+        if invited is not None:
+            invited.telegram_id = tg_id
+            invited.name = full_name
+            invited.status = "active"
+            await session.commit()
+            return invited
+    return None
+
+
 # що бачить/вносить кожна роль (owner — все)
 ROLE_CATEGORIES: dict[str, set[str]] = {
     "owner": {"production", "life", "dog", "finance", "logistics"},
@@ -78,6 +118,8 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="no user in initData")
 
     user = (await session.execute(select(User).where(User.telegram_id == tg_id))).scalar_one_or_none()
+    if user is None:  # перший вхід через Mini App — провіжнимо owner/allowed/інвайт
+        user = await _provision_user(session, tg_id, tg_user)
     if user is None or user.status != "active":
         raise HTTPException(status_code=403, detail="not whitelisted")
     return user
