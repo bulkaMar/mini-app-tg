@@ -25,10 +25,14 @@ class Settings(BaseSettings):
     init_data_max_age: int = 86400  # сек, свіжість auth_date
     dev_auth: bool = False  # ТІЛЬКИ ДЕВ: пускати запити без initData з роллю з X-Dev-Role
 
-    @field_validator("database_url")
+    @field_validator("database_url", mode="before")
     @classmethod
     def _async_driver(cls, v: str) -> str:
         """Railway/Heroku дають postgresql://… — додаємо async-драйвер для SQLAlchemy."""
+        if not isinstance(v, str):
+            return v
+        # Railway/копіпаст лишають зайві пробіли/перенос рядка → asyncpg бачить ім'я БД як "postgres\n"
+        v = v.strip()
         if v.startswith("postgresql://"):
             return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         if v.startswith("postgres://"):  # старий формат Heroku
