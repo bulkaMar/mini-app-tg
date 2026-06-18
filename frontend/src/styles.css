@@ -324,11 +324,38 @@ html, body {
 }
 .sheet {
   background: var(--bg); width: 100%; max-width: 480px;
+  max-height: 88dvh; /* не вище екрана — шапка з хрестиком завжди доступна */
   border-radius: 20px 20px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; gap: 12px;
 }
 .sheet h2 { font-size: 18px; }
-.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 0 0 auto; }
+.sheet-head-right { display: flex; align-items: center; gap: 4px; }
+/* тіло аркуша скролиться окремо, шапка лишається на місці */
+.sheet-body {
+  flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 0 -16px; padding: 0 16px; /* щоб свайп-рядки тягнулись на всю ширину */
+}
+.btn-clear-all {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: var(--red); font-size: 13px; font-weight: 700; padding: 6px 8px; border-radius: 8px;
+}
+.btn-clear-all:active { transform: scale(0.95); }
+.swipe-hint {
+  font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px;
+  margin: -2px 0 2px;
+}
+
+/* ---------- свайп-рядок (прибрати сповіщення) ---------- */
+.swipe-row { position: relative; border-radius: 12px; overflow: hidden; }
+.swipe-row.out { opacity: 0; max-height: 0; margin-top: -12px; transition: opacity .2s ease, max-height .25s ease, margin-top .25s ease; }
+.swipe-bg {
+  position: absolute; inset: 0; background: var(--red); color: #fff;
+  display: flex; align-items: center; gap: 6px; padding-left: 16px;
+  font-size: 13px; font-weight: 700; border-radius: 12px;
+}
+.swipe-fg { position: relative; touch-action: pan-y; } /* вертикальний скрол — нативний, горизонталь ловимо самі */
 .sheet-head h2 { flex: 1; min-width: 0; }
 .sheet input, .sheet select {
   width: 100%; background: var(--card); border: 1px solid var(--line);

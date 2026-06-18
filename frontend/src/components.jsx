@@ -86,6 +86,48 @@ export function Entry({ e, label }) {
   )
 }
 
+/* рядок зі свайпом управо → прибрати (для сповіщень) */
+export function SwipeRow({ onDelete, children }) {
+  const [dx, setDx] = useState(0)
+  const [out, setOut] = useState(false)
+  const s = useRef(null) // {x, y, dir: 'h'|'v'|null}
+
+  const onStart = (e) => { const t = e.touches[0]; s.current = { x: t.clientX, y: t.clientY, dir: null } }
+  const onMove = (e) => {
+    const st = s.current
+    if (!st) return
+    const t = e.touches[0]
+    const dX = t.clientX - st.x
+    const dY = t.clientY - st.y
+    if (st.dir === null) {
+      if (Math.abs(dX) < 8 && Math.abs(dY) < 8) return
+      st.dir = Math.abs(dX) > Math.abs(dY) ? 'h' : 'v' // визначаємо напрям один раз
+    }
+    if (st.dir === 'h') setDx(Math.max(0, dX)) // тягнемо лише вправо
+  }
+  const onEnd = () => {
+    const st = s.current
+    s.current = null
+    if (st && st.dir === 'h' && dx > 96) { setOut(true); haptic(); setTimeout(onDelete, 200) }
+    else setDx(0)
+  }
+
+  return (
+    <div className={`swipe-row ${out ? 'out' : ''}`}>
+      <div className="swipe-bg">{Icons.trash(17)} Прибрати</div>
+      <div
+        className="swipe-fg"
+        style={{ transform: `translateX(${out ? '110%' : dx + 'px'})`, transition: s.current ? 'none' : 'transform .2s ease' }}
+        onTouchStart={onStart}
+        onTouchMove={onMove}
+        onTouchEnd={onEnd}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function TabBar({ tabs, active, onChange }) {
   return (
     <nav className="tabbar">
@@ -462,7 +504,7 @@ export function ConfirmDialog({ text, onYes, onNo }) {
 }
 
 /* ---------- проста шторка-форма ---------- */
-export function Sheet({ title, onClose, children }) {
+export function Sheet({ title, onClose, children, action }) {
   useEffect(() => {
     const h = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)
@@ -473,9 +515,12 @@ export function Sheet({ title, onClose, children }) {
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <h2>{title}</h2>
-          <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
+          <div className="sheet-head-right">
+            {action}
+            <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
+          </div>
         </div>
-        {children}
+        <div className="sheet-body">{children}</div>
       </div>
     </div>
   )
@@ -491,15 +536,26 @@ const feedLabel = (e) =>
 
 export function NotificationBell({ me }) {
   const storeKey = `pult:feedSeen:${me?.telegram_id ?? 'x'}`
+  const dismissKey = `pult:feedDismissed:${me?.telegram_id ?? 'x'}`
   const [feed, setFeed] = useState([])
   const [seen, setSeen] = useState(() => {
     const v = Number(localStorage.getItem(storeKey))
     return localStorage.getItem(storeKey) !== null && Number.isFinite(v) ? v : null // null = ще не ініціалізовано
   })
+  // локально прибрані сповіщення (по користувачу) — стрічку команди не чіпаємо
+  const [dismissed, setDismissed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(dismissKey) || '[]')) } catch { return new Set() }
+  })
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState([]) // знімок «нових» на момент відкриття шторки
   const seenRef = useRef(seen)
   seenRef.current = seen
+
+  const persistDismissed = (set) => localStorage.setItem(dismissKey, JSON.stringify([...set].slice(-300)))
+  const dismiss = (id) => setDismissed((prev) => { const n = new Set(prev); n.add(id); persistDismissed(n); return n })
+  const clearAll = (ids) => setDismissed((prev) => {
+    const n = new Set(prev); ids.forEach((id) => n.add(id)); persistDismissed(n); return n
+  })
 
   useEffect(() => {
     let alive = true
@@ -524,9 +580,11 @@ export function NotificationBell({ me }) {
   }, [storeKey])
 
   const base = seen === null ? Infinity : seen // поки позначку не зчитано — нічого не «нове»
-  const fresh = feed.filter((e) => e.id > base && e.role !== me?.role)
+  const fresh = feed.filter((e) => e.id > base && e.role !== me?.role && !dismissed.has(e.id))
   const count = fresh.length
-  const earlier = feed.filter((e) => !shown.some((s) => s.id === e.id)).slice(0, 12)
+  const shownList = shown.filter((e) => !dismissed.has(e.id))
+  const earlierList = feed.filter((e) => !shown.some((s) => s.id === e.id) && !dismissed.has(e.id)).slice(0, 12)
+  const total = shownList.length + earlierList.length
 
   const openSheet = () => {
     haptic()
@@ -547,12 +605,25 @@ export function NotificationBell({ me }) {
         </button>
       </div>
       {open && (
-        <Sheet title="Сповіщення" onClose={() => setOpen(false)}>
-          {shown.length > 0 && <div className="section-label">Нове</div>}
-          {shown.map((e) => <Entry key={e.id} e={e} label={feedLabel(e)} />)}
-          {earlier.length > 0 && <div className="section-label">{shown.length > 0 ? 'Раніше' : 'Стрічка'}</div>}
-          {earlier.map((e) => <Entry key={e.id} e={e} label={feedLabel(e)} />)}
-          {feed.length === 0 && <div className="empty">Поки тихо</div>}
+        <Sheet
+          title="Сповіщення"
+          onClose={() => setOpen(false)}
+          action={total > 0 && (
+            <button className="btn-clear-all" onClick={() => clearAll([...shownList, ...earlierList].map((e) => e.id))}>
+              Очистити все
+            </button>
+          )}
+        >
+          {total > 0 && <div className="swipe-hint">Свайп управо — прибрати</div>}
+          {shownList.length > 0 && <div className="section-label">Нове</div>}
+          {shownList.map((e) => (
+            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={feedLabel(e)} /></SwipeRow>
+          ))}
+          {earlierList.length > 0 && <div className="section-label">{shownList.length > 0 ? 'Раніше' : 'Стрічка'}</div>}
+          {earlierList.map((e) => (
+            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={feedLabel(e)} /></SwipeRow>
+          ))}
+          {total === 0 && <div className="empty">Поки тихо</div>}
         </Sheet>
       )}
     </>
