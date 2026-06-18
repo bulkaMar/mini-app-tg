@@ -293,8 +293,9 @@ function Finance({ onBack }) {
           </span>
           <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>
           {!e.approved && m.can_approve && (
-            <button className="btn-confirm" onClick={(ev) => { ev.stopPropagation(); approve(e.id) }}>
-              {Icons.check(14)} Підтвердити
+            <button className="btn-confirm" aria-label="Підтвердити"
+              onClick={(ev) => { ev.stopPropagation(); approve(e.id) }}>
+              {Icons.check(16)}
             </button>
           )}
           <button className="btn-icon" aria-label="Редагувати"

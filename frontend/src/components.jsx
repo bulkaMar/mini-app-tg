@@ -742,7 +742,6 @@ export function NotificationBell({ me }) {
             </button>
           )}
         >
-          {total > 0 && <div className="swipe-hint">Свайп уліво → «Видалити»</div>}
           {shownList.length > 0 && <div className="section-label">Нове</div>}
           {shownList.map((e) => (
             <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={directionLabel(e, me?.role)} /></SwipeRow>

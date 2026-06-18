@@ -352,7 +352,9 @@ html, body {
 }
 
 /* ---------- свайп-рядок (прибрати сповіщення) ---------- */
-.swipe-row { position: relative; border-radius: 12px; overflow: hidden; }
+/* flex-shrink:0 — інакше у скляній шторці (flex-колонка) багато рядків стискаються
+   до першого рядка й текст ховається під overflow:hidden */
+.swipe-row { position: relative; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
 .swipe-row.out { opacity: 0; max-height: 0; margin-top: -12px; transition: opacity .2s ease, max-height .25s ease, margin-top .25s ease; }
 .swipe-del {
   position: absolute; top: 0; right: 0; height: 100%; width: 92px;
