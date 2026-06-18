@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { get, patch, post } from './api'
 import { haptic } from './telegram'
+import { onLiveChange } from './live'
 
 /* ---------- іконки (інлайн SVG, stroke 1.8) ---------- */
 const I = ({ children, size = 22 }) => (
@@ -179,19 +180,21 @@ export function useToast() {
 
 /* ---------- авто-оновлення екрана: одразу + кожні ms + при поверненні фокуса ----------
    щоб надходження від інших зʼявлялись самі, без перезавантаження сторінки (як дзвіночок) */
-export function usePoll(fn, ms = 12000) {
+export function usePoll(fn, ms = 30000) {
   const ref = useRef(fn)
   ref.current = fn
   useEffect(() => {
-    ref.current()
-    const timer = setInterval(() => ref.current(), ms)
-    // оновлюємо одразу при поверненні в апку: focus не завжди стріляє у Telegram WebView,
-    // тож слухаємо ще й visibilitychange + pageshow (повернення з bfcache)
-    const refresh = () => { if (document.visibilityState !== 'hidden') ref.current() }
+    const run = () => ref.current()
+    run() // первинне завантаження
+    const off = onLiveChange(run) // миттєво при зміні на сервері (SSE)
+    // оновлюємо й при поверненні в апку: focus не завжди стріляє у Telegram WebView
+    const refresh = () => { if (document.visibilityState !== 'hidden') run() }
     window.addEventListener('focus', refresh)
     window.addEventListener('pageshow', refresh)
     document.addEventListener('visibilitychange', refresh)
+    const timer = setInterval(run, ms) // запасний пінг, якщо SSE недоступний
     return () => {
+      off()
       clearInterval(timer)
       window.removeEventListener('focus', refresh)
       window.removeEventListener('pageshow', refresh)
@@ -588,10 +591,11 @@ export function NotificationBell({ me }) {
       } catch { /* бек недоступний — мовчки, дзвіночок просто не горить */ }
     }
     load()
-    const timer = setInterval(load, FEED_POLL_MS)
+    const off = onLiveChange(load) // миттєво при зміні на сервері (SSE)
+    const timer = setInterval(load, FEED_POLL_MS) // запасний пінг
     const onFocus = () => load()
     window.addEventListener('focus', onFocus)
-    return () => { alive = false; clearInterval(timer); window.removeEventListener('focus', onFocus) }
+    return () => { alive = false; off(); clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [storeKey])
 
   const base = seen === null ? Infinity : seen // поки позначку не зчитано — нічого не «нове»

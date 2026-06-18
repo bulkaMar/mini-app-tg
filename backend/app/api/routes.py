@@ -1,6 +1,8 @@
+import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +14,50 @@ from ..services.notify import notify_owner
 from ..services.saver import parse_due, save_classified
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
+from .auth import InitDataError, validate_init_data
 from .deps import allowed_categories, get_current_user, get_session, require_owner
+from .events import subscribe, unsubscribe
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/events")
+async def events(request: Request, auth: str | None = Query(default=None)):
+    """SSE-стрім: пушить подію `change`, коли в БД щось змінилось.
+    EventSource не вміє слати кастомні заголовки → initData приходить у query."""
+    if auth:
+        try:
+            validate_init_data(auth)
+        except InitDataError:
+            raise HTTPException(status_code=401, detail="invalid initData")
+    elif not settings.dev_auth:
+        raise HTTPException(status_code=401, detail="initData required")
+
+    queue = subscribe()
+
+    async def gen():
+        try:
+            yield "event: ready\ndata: 1\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    rev = await asyncio.wait_for(queue.get(), timeout=20)
+                    yield f"event: change\ndata: {rev}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"  # heartbeat, щоб проксі не рвало зʼєднання
+        finally:
+            unsubscribe(queue)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # вимкнути буферизацію на проксі (Railway/nginx)
+        },
+    )
 
 
 # ---------- me / dashboard ----------

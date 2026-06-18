@@ -1,5 +1,6 @@
 """REST API для Mini App: uvicorn app.api.main:app --reload --port 8000"""
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,13 +8,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import settings
 from ..db import init_db
+from .events import watch_changes
 from .routes import router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    yield
+    watcher = asyncio.create_task(watch_changes())  # фоновий вотчер для SSE
+    try:
+        yield
+    finally:
+        watcher.cancel()
+        try:
+            await watcher
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="PULT API", lifespan=lifespan)
