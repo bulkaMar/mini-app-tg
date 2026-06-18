@@ -34,6 +34,7 @@ class Message(Base):
     audio_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     classified_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     category: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target_role: Mapped[str | None] = mapped_column(String(20), nullable=True)  # кому адресовано
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..models import BudgetItem, Expense, Message, Risk, Task, User
+from .saver import resolve_target_role
 
 ROLE_LABELS = {"owner": "власник", "manager": "менеджер", "assistant": "асистент", "driver": "водій"}
 
@@ -86,6 +87,7 @@ async def compute_dashboard(session: AsyncSession) -> dict:
             "id": m.id,
             "role": m.sender_role,
             "role_label": ROLE_LABELS.get(m.sender_role, m.sender_role),
+            "target_role": m.target_role or resolve_target_role(m.sender_role, m.category),
             "name": name or "",
             "type": m.classified_type,
             "category": m.category,

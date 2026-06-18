@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CAT_LABEL, Entry, Header, Icons, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast } from '../components'
+import { Entry, Header, Icons, NotificationBell, Sheet, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -39,8 +39,7 @@ function Project({ me }) {
       <div className="section-label">Сьогодні</div>
       {feed.length === 0 && <div className="empty">Записів ще немає — продиктуй перший звіт</div>}
       {feed.slice(0, 10).map((e) => (
-        <Entry key={e.id} e={e}
-          label={e.type === 'risk' ? undefined : e.type === 'money' ? 'ФІНАНСИ' : e.type === 'status' ? 'СТАТУС' : CAT_LABEL[e.category]} />
+        <Entry key={e.id} e={e} label={directionLabel(e, me?.role)} />
       ))}
       {report && <ReportSheet onClose={() => { setReport(false); load() }} />}
     </div>

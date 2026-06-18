@@ -43,6 +43,19 @@ export const ROLE_BADGE = { owner: 'ВЛАСНИК', manager: 'МЕНЕДЖЕР'
 export const TYPE_LABEL = { task: 'ЗАДАЧА', risk: 'ТРИВОГА', money: 'ФІНАНСИ', status: 'СТАТУС' }
 export const CAT_LABEL = { production: 'ПРОЄКТ', life: 'ПОБУТ', dog: 'ПЕС', finance: 'ФІНАНСИ', logistics: 'ПОДАЧА' }
 
+/* напрямок запису «хто → кому»: себе показуємо особисто (власник — «Ти», решта — «Я») */
+const ROLE_NAME = { owner: 'Власник', manager: 'Менеджер', assistant: 'Асистент', driver: 'Водій' }
+function whoName(role, meRole) {
+  if (!role) return ''
+  if (role === meRole) return meRole === 'owner' ? 'Ти' : 'Я'
+  return ROLE_NAME[role] || role
+}
+export function directionLabel(e, meRole) {
+  const from = whoName(e.role, meRole)
+  if (!e.target_role || e.target_role === e.role) return from.toUpperCase()
+  return `${from} → ${whoName(e.target_role, meRole)}`.toUpperCase()
+}
+
 export function entryColor(e) {
   if (e.type === 'risk') return 'red'
   if (e.type === 'money') return e.role === 'driver' ? 'gold' : 'blue'
@@ -647,8 +660,6 @@ export function Sheet({ title, onClose, children, action }) {
 // зʼявились після «востаннє бачених» і не від самого користувача; позначку
 // тримаємо в localStorage, опитуємо стрічку раз на 15 с і при поверненні фокуса.
 const FEED_POLL_MS = 15000
-const feedLabel = (e) =>
-  `${e.role_label?.toUpperCase() || ''}${CAT_LABEL[e.category] ? ' · ' + CAT_LABEL[e.category] : ''}`
 
 export function NotificationBell({ me }) {
   const storeKey = `pult:feedSeen:${me?.telegram_id ?? 'x'}`
@@ -734,11 +745,11 @@ export function NotificationBell({ me }) {
           {total > 0 && <div className="swipe-hint">Свайп уліво → «Видалити»</div>}
           {shownList.length > 0 && <div className="section-label">Нове</div>}
           {shownList.map((e) => (
-            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={feedLabel(e)} /></SwipeRow>
+            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={directionLabel(e, me?.role)} /></SwipeRow>
           ))}
           {earlierList.length > 0 && <div className="section-label">{shownList.length > 0 ? 'Раніше' : 'Стрічка'}</div>}
           {earlierList.map((e) => (
-            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={feedLabel(e)} /></SwipeRow>
+            <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={directionLabel(e, me?.role)} /></SwipeRow>
           ))}
           {total === 0 && <div className="empty">Поки тихо</div>}
         </Sheet>

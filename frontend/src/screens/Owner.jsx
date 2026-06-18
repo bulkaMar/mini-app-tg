@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CAT_LABEL, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast,
+  ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -84,7 +84,7 @@ function Home({ openView }) {
       <div className="section-label">Надійшло</div>
       {d.feed.length === 0 && <div className="empty">Поки тихо</div>}
       {d.feed.slice(0, 6).map((e) => (
-        <Entry key={e.id} e={e} label={e.role_label?.toUpperCase()} />
+        <Entry key={e.id} e={e} label={directionLabel(e, 'owner')} />
       ))}
     </div>
   )
@@ -100,7 +100,7 @@ function Flow() {
     <div className="screen">
       <Header icon="inbox" color="var(--orange)" title="Потік" sub={`${feed.length} записів`} />
       {feed.length === 0 && <div className="empty">Записів ще немає</div>}
-      {feed.map((e) => <Entry key={e.id} e={e} label={`${e.role_label?.toUpperCase()} · ${CAT_LABEL[e.category] || ''}`} />)}
+      {feed.map((e) => <Entry key={e.id} e={e} label={directionLabel(e, 'owner')} />)}
     </div>
   )
 }

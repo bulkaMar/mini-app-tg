@@ -17,6 +17,21 @@ def parse_due(due: str | None) -> date_type | None:
         return None
 
 
+# кому адресовано запис (для напрямку «хто → кому» у стрічці)
+_CATEGORY_TO_ROLE = {"production": "manager", "life": "assistant", "dog": "assistant", "logistics": "driver"}
+
+
+def resolve_target_role(sender_role: str, category: str | None, owner_hint: str | None = None) -> str | None:
+    """Працівник пише → власнику; власник дає доручення → за явним адресатом або темою."""
+    if sender_role != "owner":
+        return "owner"
+    if owner_hint == "me":
+        return "owner"
+    if owner_hint in ("manager", "assistant", "driver"):
+        return owner_hint
+    return _CATEGORY_TO_ROLE.get(category or "")
+
+
 async def save_classified(
     session: AsyncSession,
     user: User,
@@ -33,6 +48,7 @@ async def save_classified(
         audio_file_id=audio_file_id,
         classified_type=c.type,
         category=c.category,
+        target_role=resolve_target_role(user.role, c.category, getattr(c, "owner", None)),
     )
     session.add(msg)
 
@@ -115,6 +131,7 @@ async def save_owner_task(
             clean_text=text,
             classified_type="task",
             category=category,
+            target_role=role,  # кому роздали (для напрямку у стрічці)
         )
     )
     task = Task(

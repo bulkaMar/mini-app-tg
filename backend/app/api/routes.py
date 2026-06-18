@@ -11,7 +11,7 @@ from ..classifier import Classification, classify, plan_tasks
 from ..config import settings
 from ..models import BudgetItem, Expense, Message, Risk, Task, User
 from ..services.notify import route_notifications
-from ..services.saver import parse_due, save_classified, save_owner_task
+from ..services.saver import parse_due, resolve_target_role, save_classified, save_owner_task
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
 from .auth import InitDataError, validate_init_data
@@ -95,6 +95,7 @@ async def feed(
             "id": m.id,
             "role": m.sender_role,
             "role_label": ROLE_LABELS.get(m.sender_role, m.sender_role),
+            "target_role": m.target_role or resolve_target_role(m.sender_role, m.category),
             "type": m.classified_type,
             "category": m.category,
             "text": m.clean_text or m.raw_text,
