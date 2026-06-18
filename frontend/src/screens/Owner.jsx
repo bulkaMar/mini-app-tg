@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
+  ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -13,11 +13,13 @@ export default function Owner({ me }) {
   const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
   const [refreshKey, setRefreshKey] = useState(0) // після диктовки перезавантажуємо активний екран
 
+  const back = () => setView(null)
+  const drill = (node) => <SwipeBack onBack={back}>{node}</SwipeBack> // свайп уліво → назад
   const screen =
-    view === 'production' ? <Projects onBack={() => setView(null)} /> :
-    view === 'life' ? <Life onBack={() => setView(null)} /> :
-    view === 'risks' ? <Risks onBack={() => setView(null)} /> :
-    view === 'money' ? <Finance onBack={() => setView(null)} /> :
+    view === 'production' ? drill(<Projects onBack={back} />) :
+    view === 'life' ? drill(<Life onBack={back} />) :
+    view === 'risks' ? drill(<Risks onBack={back} />) :
+    view === 'money' ? drill(<Finance onBack={back} />) :
     tab === 'home' ? <Home openView={setView} /> :
     tab === 'flow' ? <Flow /> :
     tab === 'team' ? <Team /> :

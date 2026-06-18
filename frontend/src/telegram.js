@@ -11,6 +11,13 @@ export function initTelegram() {
   } catch {
     /* старі клієнти */
   }
+  // вимикаємо вертикальний свайп Telegram (свайп вниз = згорнути апку),
+  // щоб видалення сповіщень/жести не закривали Mini App випадково
+  try {
+    tg.disableVerticalSwipes?.()
+  } catch {
+    /* старі клієнти (до Bot API 7.7) */
+  }
 }
 
 export function getInitData() {

@@ -162,6 +162,36 @@ export function SwipeRow({ onDelete, children }) {
   )
 }
 
+/* свайп уліво по екрану → назад (для дрілдаунів). Вертикальний скрол не чіпаємо:
+   напрям фіксуємо один раз; спрацьовує лише на чіткому горизонтальному жесті вліво. */
+export function SwipeBack({ onBack, children }) {
+  const s = useRef(null) // {x, y, dir: 'h'|'v'|null, fired}
+
+  const onDown = (e) => { s.current = { x: e.clientX, y: e.clientY, dir: null, fired: false } }
+  const onMove = (e) => {
+    const st = s.current
+    if (!st || st.fired) return
+    const dx = e.clientX - st.x
+    const dy = e.clientY - st.y
+    if (st.dir === null) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+      st.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v' // визначаємо напрям один раз
+    }
+    if (st.dir === 'h' && dx < -70 && Math.abs(dy) < 55) {
+      st.fired = true
+      haptic()
+      onBack()
+    }
+  }
+  const onEnd = () => { s.current = null }
+
+  return (
+    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd}>
+      {children}
+    </div>
+  )
+}
+
 export function TabBar({ tabs, active, onChange }) {
   return (
     <nav className="tabbar">
@@ -725,13 +755,18 @@ export function NotificationBell({ me }) {
 
   return (
     <>
-      <div className="notif-wrap">
-        <button className={`notif-bell ${count ? 'has-new' : ''}`} onClick={openSheet}
-          aria-label={count ? `Сповіщення: ${count} нових` : 'Сповіщення'}>
-          {Icons.bell(22)}
-          {count > 0 && <span className="notif-badge">{count > 9 ? '9+' : count}</span>}
-        </button>
-      </div>
+      {/* портал у body — щоб дзвіночок був жорстко прикріплений до екрана
+          (не залежав від трансформованих контейнерів) і не їхав зі скролом */}
+      {createPortal(
+        <div className="notif-wrap">
+          <button className={`notif-bell ${count ? 'has-new' : ''}`} onClick={openSheet}
+            aria-label={count ? `Сповіщення: ${count} нових` : 'Сповіщення'}>
+            {Icons.bell(22)}
+            {count > 0 && <span className="notif-badge">{count > 9 ? '9+' : count}</span>}
+          </button>
+        </div>,
+        document.body,
+      )}
       {open && (
         <Sheet
           title="Сповіщення"
