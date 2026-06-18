@@ -515,3 +515,12 @@ html, body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- горизонтальна орієнтація: тягнемо застосунок на весь екран ---------- */
+/* у портреті телефон вужчий за 480px (cap не заважає); у landscape екран ширший —
+   знімаємо обмеження, щоб контент, док диктовки й аркуші заповнювали всю ширину */
+@media (orientation: landscape) {
+  #root { max-width: 100%; }
+  .dictate-dock,
+  .overlay .sheet { max-width: 100%; }
+}
