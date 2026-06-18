@@ -7,9 +7,11 @@ export default function Driver({ me }) {
   return (
     <div className="app">
       <NotificationBell me={me} />
-      {tab === 'shift' && <Shift me={me} />}
-      {tab === 'trips' && <Trips />}
-      {tab === 'money' && <Money />}
+      <div className="app-scroll">
+        {tab === 'shift' && <Shift me={me} />}
+        {tab === 'trips' && <Trips />}
+        {tab === 'money' && <Money />}
+      </div>
       <TabBar
         tabs={[
           { key: 'shift', icon: 'truck', label: 'Зміна' },

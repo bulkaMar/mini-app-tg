@@ -7,9 +7,11 @@ export default function Assistant({ me }) {
   return (
     <div className="app">
       <NotificationBell me={me} />
-      {tab === 'life' && <Life me={me} category="life" />}
-      {tab === 'dog' && <Life me={me} category="dog" />}
-      {tab === 'money' && <Money />}
+      <div className="app-scroll">
+        {tab === 'life' && <Life me={me} category="life" />}
+        {tab === 'dog' && <Life me={me} category="dog" />}
+        {tab === 'money' && <Money />}
+      </div>
       <TabBar
         tabs={[
           { key: 'life', icon: 'home', label: 'Побут' },

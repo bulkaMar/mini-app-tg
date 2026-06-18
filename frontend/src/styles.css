@@ -28,11 +28,20 @@ html, body {
 #root { max-width: 480px; margin: 0 auto; }
 
 .app {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  overflow: hidden; /* сторінка сама НЕ гортається — лише внутрішній .app-scroll,
+                       щоб фіксовані елементи (дзвіночок, таб-бар, док) не їхали зі скролом на iOS */
+}
+.app-scroll {
+  flex: 1 1 auto;
+  min-height: 0; /* інакше скрол не працює у flex-колонці */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom)); /* місце під таб-бар */
 }
 
 .screen { padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 12px; }
@@ -284,7 +293,7 @@ html, body {
 .toast.warn svg { color: #ff8b7e; }
 
 /* ---------- диктовка-док над таб-баром (owner) ---------- */
-.app.with-dock { padding-bottom: calc(152px + env(safe-area-inset-bottom)); }
+.app.with-dock .app-scroll { padding-bottom: calc(152px + env(safe-area-inset-bottom)); }
 .dictate-dock {
   position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 480px;

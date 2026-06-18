@@ -28,7 +28,9 @@ export default function Owner({ me }) {
   return (
     <div className="app with-dock">
       <NotificationBell me={me} />
-      <div key={refreshKey}>{screen}</div>
+      <div className="app-scroll">
+        <div key={refreshKey}>{screen}</div>
+      </div>
       <div className="dictate-dock">
         <Dictate onSaved={() => setRefreshKey((k) => k + 1)} />
       </div>

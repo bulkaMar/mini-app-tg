@@ -7,9 +7,11 @@ export default function Manager({ me }) {
   return (
     <div className="app">
       <NotificationBell me={me} />
-      {tab === 'project' && <Project me={me} />}
-      {tab === 'risks' && <Risks />}
-      {tab === 'tasks' && <Tasks />}
+      <div className="app-scroll">
+        {tab === 'project' && <Project me={me} />}
+        {tab === 'risks' && <Risks />}
+        {tab === 'tasks' && <Tasks />}
+      </div>
       <TabBar
         tabs={[
           { key: 'project', icon: 'film', label: 'Проєкт' },
