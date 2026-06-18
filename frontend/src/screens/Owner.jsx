@@ -125,7 +125,7 @@ function Team() {
       setAdding(false); setUsername(''); setName('')
       showToast('Запрошення створено — користувач активується після /start у боті')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!team) return <div className="loading">Завантаження…</div>
@@ -205,7 +205,7 @@ function MemberSheet({ m, onClose, onChanged }) {
     try {
       await patch(`/api/team/${m.id}`, { name: name.trim(), username: username.trim(), role, ...extra })
       onChanged()
-    } catch (e) { showToast(`⚠️ ${e.message}`) } finally { setBusy(false) }
+    } catch (e) { showToast(e.message, 'warn') } finally { setBusy(false) }
   }
 
   return (
@@ -256,11 +256,11 @@ function Finance({ onBack }) {
       await post('/api/money', { text: text.trim(), amount: Number(amount) })
       setAdding(false); setText(''); setAmount('')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   const approve = async (id) => {
-    try { await post(`/api/money/${id}/approve`); load() } catch (e) { showToast(`⚠️ ${e.message}`) }
+    try { await post(`/api/money/${id}/approve`); load() } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!m) return <div className="loading">Завантаження…</div>
@@ -357,7 +357,7 @@ function BudgetSheet({ onClose, onSaved }) {
     try {
       await put('/api/budget', { items: items.map((i) => ({ name: i.name.trim(), amount: Number(i.amount) })) })
       onSaved()
-    } catch (e) { showToast(`⚠️ ${e.message}`) } finally { setBusy(false) }
+    } catch (e) { showToast(e.message, 'warn') } finally { setBusy(false) }
   }
 
   return (
@@ -440,7 +440,7 @@ function Life({ onBack }) {
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
       <Header icon="home" color="var(--green)" title="Побут" sub={`${open.length} справи`} />
       <div className="section-label">На сьогодні</div>
-      {open.length === 0 && <div className="empty">Все зроблено 🎉</div>}
+      {open.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Все зроблено</span></div>}
       {open.map((t) => (
         <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onOpen={() => setSel(t)} />
       ))}
@@ -464,7 +464,7 @@ function Risks({ onBack }) {
   useEffect(() => { load() }, [load])
 
   const resolve = async (id) => {
-    try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(`⚠️ ${e.message}`) }
+    try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!risks) return <div className="loading">Завантаження…</div>
@@ -479,7 +479,7 @@ function Risks({ onBack }) {
         <div className="stat"><div className="num">{risks.length}</div><div className="lbl">за тиждень</div></div>
       </div>
       <div className="section-label">Активні</div>
-      {active.length === 0 && <div className="empty">🟢 Тривог немає</div>}
+      {active.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Тривог немає</span></div>}
       {active.map((r) => (
         <div key={r.id} className={`entry ${r.level === 'high' ? 'red' : r.level === 'med' ? 'gold' : 'green'}`}>
           <div className="top">

@@ -55,7 +55,7 @@ function ReportSheet({ onClose }) {
     try {
       await post('/api/ingest', { text: text.trim() })
       onClose()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
   return (
     <div className="overlay" onClick={onClose}>
@@ -77,7 +77,7 @@ function Risks() {
   useEffect(() => { load() }, [load])
 
   const resolve = async (id) => {
-    try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(`⚠️ ${e.message}`) }
+    try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!risks) return <div className="loading">Завантаження…</div>
@@ -85,7 +85,7 @@ function Risks() {
   return (
     <div className="screen">
       <Header icon="alert" color="var(--red)" title="Тривоги" sub={`${active.length} активні`} />
-      {active.length === 0 && <div className="empty">🟢 Тривог немає</div>}
+      {active.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Тривог немає</span></div>}
       {active.map((r) => (
         <div key={r.id} className={`entry ${r.level === 'high' ? 'red' : 'gold'}`}>
           <div className="top">
@@ -94,7 +94,7 @@ function Risks() {
           </div>
           <div className="text">{r.text}</div>
           <div className="meta" style={{ justifyContent: 'space-between' }}>
-            <span>{r.keyword_hit ? '⚠️ пуш власнику' : '🕐 чекає рішення'}</span>
+            <span className="ico-text">{r.keyword_hit ? Icons.alert(13) : Icons.clock(13)} {r.keyword_hit ? 'пуш власнику' : 'чекає рішення'}</span>
             <button className="btn-small ghost" onClick={() => resolve(r.id)}>Вирішено</button>
           </div>
         </div>
@@ -119,7 +119,7 @@ function Tasks() {
       await post('/api/tasks', { category: 'production', text: text.trim() })
       setAdding(false); setText('')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!tasks) return <div className="loading">Завантаження…</div>

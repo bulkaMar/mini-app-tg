@@ -33,7 +33,7 @@ function AddTripSheet({ onClose }) {
     try {
       await post('/api/tasks', { category: 'logistics', text: text.trim() })
       onClose(true)
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
   return (
     <Sheet title="Нова поїздка" onClose={() => onClose(false)}>
@@ -135,7 +135,7 @@ function Money() {
       await post('/api/money', { text: text.trim(), amount: Number(amount) })
       setAdding(false); setText(''); setAmount('')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!m) return <div className="loading">Завантаження…</div>

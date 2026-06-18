@@ -276,8 +276,12 @@ html, body {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
   background: var(--ink); color: #fff; font-size: 14px; font-weight: 600;
   border-radius: 12px; padding: 10px 16px; z-index: 50;
-  max-width: 90%; text-align: center;
+  max-width: 90%; text-align: left;
+  display: flex; align-items: center; gap: 8px;
 }
+.toast svg { flex-shrink: 0; }
+.toast.ok svg { color: #5fd08a; }
+.toast.warn svg { color: #ff8b7e; }
 
 /* ---------- диктовка-док над таб-баром (owner) ---------- */
 .app.with-dock { padding-bottom: calc(152px + env(safe-area-inset-bottom)); }

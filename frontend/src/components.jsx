@@ -161,13 +161,19 @@ export function Meter({ title, value, pct, level, onEdit }) {
 
 let toastTimer
 export function useToast() {
-  const [msg, setMsg] = useState(null)
-  const show = (m) => {
-    setMsg(m)
+  const [t, setT] = useState(null) // { msg, kind: 'info'|'ok'|'warn' }
+  const show = (msg, kind = 'info') => {
+    setT({ msg, kind })
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => setMsg(null), 2600)
+    toastTimer = setTimeout(() => setT(null), 2600)
   }
-  const node = msg ? <div className="toast">{msg}</div> : null
+  const node = t ? (
+    <div className={`toast ${t.kind}`}>
+      {t.kind === 'ok' && Icons.check(16)}
+      {t.kind === 'warn' && Icons.alert(16)}
+      <span>{t.msg}</span>
+    </div>
+  ) : null
   return [node, show]
 }
 
@@ -206,10 +212,10 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
       const r = await post('/api/ingest', { text: t.trim() })
       setText('')
       setPreview(null)
-      showToast(`✅ ${TYPE_LABEL[r.type] || 'Запис'} · ${CAT_LABEL[r.category] || ''} — збережено`)
+      showToast(`${TYPE_LABEL[r.type] || 'Запис'} · ${CAT_LABEL[r.category] || ''} — збережено`, 'ok')
       onSaved?.(r)
     } catch (err) {
-      showToast(`⚠️ ${err.message}`)
+      showToast(err.message, 'warn')
     } finally {
       setBusy(false)
     }
@@ -237,7 +243,7 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
           setPreview(r)
           setDraft(r.text || r.transcript || '')
         } catch (err) {
-          showToast(`⚠️ ${err.message}`)
+          showToast(err.message, 'warn')
         } finally {
           setPhase(null)
         }
@@ -389,7 +395,7 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
       if (amountValid) body.amount = Number(amount)
       await patch(`/api/money/${e.id}`, body)
       onChanged()
-    } catch (err) { showToast(`⚠️ ${err.message}`) } finally { setBusy(false) }
+    } catch (err) { showToast(err.message, 'warn') } finally { setBusy(false) }
   }
 
   const remove = () => setConfirmDel(true)
@@ -444,7 +450,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
     try {
       await patch(`/api/tasks/${t.id}`, { text: text.trim(), due: due || null, ...extra })
       onChanged()
-    } catch (err) { showToast(`⚠️ ${err.message}`) } finally { setBusy(false) }
+    } catch (err) { showToast(err.message, 'warn') } finally { setBusy(false) }
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get } from './api'
 import { initTelegram } from './telegram'
+import { Icons } from './components'
 import Owner from './screens/Owner'
 import Manager from './screens/Manager'
 import Assistant from './screens/Assistant'
@@ -19,7 +20,7 @@ export default function App() {
     return (
       <div className="app" style={{ justifyContent: 'center' }}>
         <div className="screen" style={{ textAlign: 'center', gap: 8 }}>
-          <div style={{ fontSize: 40 }}>⛔</div>
+          <div style={{ color: 'var(--red)', display: 'flex', justifyContent: 'center' }}>{Icons.alert(44)}</div>
           <h1 style={{ fontSize: 20 }}>Немає доступу</h1>
           <p style={{ color: 'var(--muted)', fontSize: 14 }}>
             {error}. Відкрий додаток через бота в Telegram або попроси власника додати тебе в команду.

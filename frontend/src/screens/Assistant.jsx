@@ -42,7 +42,7 @@ function Life({ me, category }) {
       await post('/api/tasks', { category, text: text.trim() })
       setAdding(false); setText('')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!tasks) return <div className="loading">Завантаження…</div>
@@ -59,7 +59,7 @@ function Life({ me, category }) {
         {Icons.plus(20)} Додати справу
       </button>
       <div className="section-label">Мої справи</div>
-      {open.length === 0 && <div className="empty">Все зроблено 🎉</div>}
+      {open.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Все зроблено</span></div>}
       {open.map((t) => (
         <button key={t.id} className="item" onClick={() => setSel(t)}>
           <span className="dot warn" />
@@ -109,7 +109,7 @@ function Money() {
       await post('/api/money', { text: text.trim(), amount: Number(amount) })
       setAdding(false); setText(''); setAmount('')
       load()
-    } catch (e) { showToast(`⚠️ ${e.message}`) }
+    } catch (e) { showToast(e.message, 'warn') }
   }
 
   if (!m) return <div className="loading">Завантаження…</div>
