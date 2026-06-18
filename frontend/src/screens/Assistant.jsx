@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, useToast } from '../components'
+import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, usePoll, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -34,7 +34,7 @@ function Life({ me, category }) {
     () => get(`/api/tasks?category=${category}`).then(setTasks).catch(() => setTasks([])),
     [category],
   )
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const add = async () => {
     if (!text.trim()) return
@@ -102,7 +102,7 @@ function Money() {
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const add = async () => {
     try {

@@ -179,15 +179,24 @@ export function useToast() {
 
 /* ---------- авто-оновлення екрана: одразу + кожні ms + при поверненні фокуса ----------
    щоб надходження від інших зʼявлялись самі, без перезавантаження сторінки (як дзвіночок) */
-export function usePoll(fn, ms = 15000) {
+export function usePoll(fn, ms = 12000) {
   const ref = useRef(fn)
   ref.current = fn
   useEffect(() => {
     ref.current()
     const timer = setInterval(() => ref.current(), ms)
-    const onFocus = () => ref.current()
-    window.addEventListener('focus', onFocus)
-    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus) }
+    // оновлюємо одразу при поверненні в апку: focus не завжди стріляє у Telegram WebView,
+    // тож слухаємо ще й visibilitychange + pageshow (повернення з bfcache)
+    const refresh = () => { if (document.visibilityState !== 'hidden') ref.current() }
+    window.addEventListener('focus', refresh)
+    window.addEventListener('pageshow', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('pageshow', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [ms])
 }
 

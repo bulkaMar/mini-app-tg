@@ -116,7 +116,7 @@ function Team() {
   const [toast, showToast] = useToast()
 
   const load = useCallback(() => get('/api/team').then(setTeam).catch(() => setTeam([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const invite = async () => {
     if (!username.trim()) return
@@ -248,7 +248,7 @@ function Finance({ onBack }) {
   const [toast, showToast] = useToast()
 
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const addExpense = async () => {
     if (!text.trim() || !amount) return
@@ -399,7 +399,7 @@ function Projects({ onBack }) {
     get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([]))
     get('/api/feed').then((f) => setFeed(f.filter((e) => e.category === 'production'))).catch(() => {})
   }, [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   return (
@@ -431,7 +431,7 @@ function Life({ onBack }) {
       get('/api/tasks?category=dog').catch(() => []),
     ]).then(([a, b]) => setTasks([...a, ...b]))
   }, [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -461,7 +461,7 @@ function Risks({ onBack }) {
   const [risks, setRisks] = useState(null)
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/risks').then(setRisks).catch(() => setRisks([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const resolve = async (id) => {
     try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(e.message, 'warn') }

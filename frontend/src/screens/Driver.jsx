@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, useToast } from '../components'
+import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast } from '../components'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
@@ -54,7 +54,7 @@ function Shift({ me }) {
     get('/api/tasks?category=logistics').then(setTasks).catch(() => setTasks([]))
     get('/api/money').then(setMoney).catch(() => {})
   }, [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   const today = tasks.filter((t) => isToday(t.time))
@@ -92,7 +92,7 @@ function Trips() {
   const [sel, setSel] = useState(null)
   const [adding, setAdding] = useState(false)
   const load = useCallback(() => get('/api/tasks?category=logistics').then(setTasks).catch(() => setTasks([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   return (
@@ -128,7 +128,7 @@ function Money() {
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const add = async () => {
     try {

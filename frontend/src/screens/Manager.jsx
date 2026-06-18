@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { get, post } from '../api'
 import { CAT_LABEL, Entry, Header, Icons, NotificationBell, Sheet, TabBar, TaskSheet, fmtTime, usePoll, useToast } from '../components'
 
@@ -74,7 +74,7 @@ function Risks() {
   const [risks, setRisks] = useState(null)
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/risks').then(setRisks).catch(() => setRisks([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const resolve = async (id) => {
     try { await post(`/api/risks/${id}/resolve`); load() } catch (e) { showToast(e.message, 'warn') }
@@ -111,7 +111,7 @@ function Tasks() {
   const [text, setText] = useState('')
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([])), [])
-  useEffect(() => { load() }, [load])
+  usePoll(load)
 
   const add = async () => {
     if (!text.trim()) return
