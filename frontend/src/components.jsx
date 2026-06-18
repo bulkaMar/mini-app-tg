@@ -87,41 +87,60 @@ export function Entry({ e, label }) {
   )
 }
 
-/* рядок зі свайпом управо → прибрати (для сповіщень) */
+/* рядок зі свайпом уліво → відкриває кнопку «Видалити»; видалення лише по кліку
+   (захист від випадкового). Pointer-події — працює і пальцем, і мишею. */
+const SWIPE_REVEAL = 92 // ширина кнопки, на стільки відʼїжджає картка
+
 export function SwipeRow({ onDelete, children }) {
   const [dx, setDx] = useState(0)
+  const [openDel, setOpenDel] = useState(false)
   const [out, setOut] = useState(false)
   const s = useRef(null) // {x, y, dir: 'h'|'v'|null}
+  const dragged = useRef(false)
 
-  const onStart = (e) => { const t = e.touches[0]; s.current = { x: t.clientX, y: t.clientY, dir: null } }
+  const onDown = (e) => { s.current = { x: e.clientX, y: e.clientY, dir: null }; dragged.current = false }
   const onMove = (e) => {
     const st = s.current
     if (!st) return
-    const t = e.touches[0]
-    const dX = t.clientX - st.x
-    const dY = t.clientY - st.y
+    const dX = e.clientX - st.x
+    const dY = e.clientY - st.y
     if (st.dir === null) {
       if (Math.abs(dX) < 8 && Math.abs(dY) < 8) return
       st.dir = Math.abs(dX) > Math.abs(dY) ? 'h' : 'v' // визначаємо напрям один раз
+      if (st.dir === 'h') { dragged.current = true; try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* ok */ } }
     }
-    if (st.dir === 'h') setDx(Math.max(0, dX)) // тягнемо лише вправо
+    if (st.dir === 'h') {
+      const baseX = openDel ? -SWIPE_REVEAL : 0
+      setDx(Math.max(-SWIPE_REVEAL - 16, Math.min(0, baseX + dX))) // тягнемо лише вліво
+    }
   }
-  const onEnd = () => {
+  const onUp = () => {
     const st = s.current
     s.current = null
-    if (st && st.dir === 'h' && dx > 96) { setOut(true); haptic(); setTimeout(onDelete, 200) }
-    else setDx(0)
+    if (!st || st.dir !== 'h') return
+    if (dx < -SWIPE_REVEAL / 2) { setOpenDel(true); setDx(-SWIPE_REVEAL); haptic() } // зафіксувати відкритим
+    else { setOpenDel(false); setDx(0) }
+  }
+
+  const del = () => { setOut(true); haptic(); setTimeout(onDelete, 220) }
+  const onRowClick = () => {
+    if (dragged.current) { dragged.current = false; return } // це був свайп, не клік
+    if (openDel) { setOpenDel(false); setDx(0) } // тап по картці закриває відкриту кнопку
   }
 
   return (
     <div className={`swipe-row ${out ? 'out' : ''}`}>
-      <div className="swipe-bg">{Icons.trash(17)} Прибрати</div>
+      <button className="swipe-del" onClick={del} tabIndex={openDel ? 0 : -1} aria-hidden={!openDel}>
+        {Icons.trash(17)} Видалити
+      </button>
       <div
         className="swipe-fg"
-        style={{ transform: `translateX(${out ? '110%' : dx + 'px'})`, transition: s.current ? 'none' : 'transform .2s ease' }}
-        onTouchStart={onStart}
-        onTouchMove={onMove}
-        onTouchEnd={onEnd}
+        style={{ transform: `translateX(${out ? '-110%' : dx + 'px'})`, transition: s.current ? 'none' : 'transform .22s ease' }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onClick={onRowClick}
       >
         {children}
       </div>
@@ -633,7 +652,7 @@ export function NotificationBell({ me }) {
             </button>
           )}
         >
-          {total > 0 && <div className="swipe-hint">Свайп управо — прибрати</div>}
+          {total > 0 && <div className="swipe-hint">Свайп уліво → «Видалити»</div>}
           {shownList.length > 0 && <div className="section-label">Нове</div>}
           {shownList.map((e) => (
             <SwipeRow key={e.id} onDelete={() => dismiss(e.id)}><Entry e={e} label={feedLabel(e)} /></SwipeRow>

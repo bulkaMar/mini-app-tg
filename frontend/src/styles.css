@@ -354,12 +354,15 @@ html, body {
 /* ---------- свайп-рядок (прибрати сповіщення) ---------- */
 .swipe-row { position: relative; border-radius: 12px; overflow: hidden; }
 .swipe-row.out { opacity: 0; max-height: 0; margin-top: -12px; transition: opacity .2s ease, max-height .25s ease, margin-top .25s ease; }
-.swipe-bg {
-  position: absolute; inset: 0; background: var(--red); color: #fff;
-  display: flex; align-items: center; gap: 6px; padding-left: 16px;
-  font-size: 13px; font-weight: 700; border-radius: 12px;
+.swipe-del {
+  position: absolute; top: 0; right: 0; height: 100%; width: 92px;
+  border: none; cursor: pointer; background: var(--red); color: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 13px; font-weight: 700; font-family: inherit;
 }
-.swipe-fg { position: relative; touch-action: pan-y; } /* вертикальний скрол — нативний, горизонталь ловимо самі */
+.swipe-del:active { filter: brightness(0.92); }
+/* фон під карткою — як у шторці, щоб кнопка не визирала з-під заокруглених кутів */
+.swipe-fg { position: relative; background: var(--bg); touch-action: pan-y; } /* вертикальний скрол — нативний, горизонталь ловимо самі */
 .sheet-head h2 { flex: 1; min-width: 0; }
 .sheet input, .sheet select {
   width: 100%; background: var(--card); border: 1px solid var(--line);

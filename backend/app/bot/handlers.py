@@ -19,7 +19,7 @@ from ..classifier import Classification, classify
 from ..config import settings
 from ..db import SessionMaker
 from ..models import Expense, Risk, User
-from ..services.notify import notify_owner
+from ..services.notify import route_notifications
 from ..services.saver import save_classified
 from ..services.status import ROLE_LABELS, compute_dashboard
 from ..services.transcribe import transcribe
@@ -138,12 +138,6 @@ async def cmd_money(message: Message) -> None:
 async def _classify_and_confirm(message: Message, db_user: User, text: str, audio_file_id: str | None = None) -> None:
     c = await classify(text, db_user.role)
 
-    # тривога за ключовим словом → миттєвий пуш owner, ще до підтвердження
-    if c.keyword_hit and db_user.telegram_id != settings.owner_telegram_id:
-        await notify_owner(
-            f"🚨 ТРИВОГА від {ROLE_LABELS.get(db_user.role, db_user.role)} ({db_user.name}):\n{c.text}"
-        )
-
     pid = uuid.uuid4().hex[:12]
     _pending[pid] = (text, c, audio_file_id)
 
@@ -195,13 +189,7 @@ async def on_save(query: CallbackQuery, db_user: User) -> None:
     raw_text, c, audio_file_id = pending
     async with SessionMaker() as session:
         await save_classified(session, db_user, raw_text, c, audio_file_id=audio_file_id)
-
-    # збережена тривога без ключового слова → теж пуш owner
-    if c.type == "risk" and not c.keyword_hit and db_user.telegram_id != settings.owner_telegram_id:
-        await notify_owner(
-            f"🚨 Тривога ({(c.risk_level or 'med').upper()}) від "
-            f"{ROLE_LABELS.get(db_user.role, db_user.role)} ({db_user.name}):\n{c.text}"
-        )
+        await route_notifications(session, db_user, c)
 
     await query.message.edit_text(query.message.text + "\n\n✅ Збережено")
     await query.answer("Збережено")

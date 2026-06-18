@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..classifier import classify
 from ..config import settings
 from ..models import BudgetItem, Expense, Message, Risk, Task, User
-from ..services.notify import notify_owner
+from ..services.notify import route_notifications
 from ..services.saver import parse_due, save_classified
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
@@ -481,11 +481,7 @@ async def ingest_text(
 ) -> dict:
     c = await classify(body.text, user.role)
     result = await save_classified(session, user, body.text, c)
-    if c.type == "risk" and user.telegram_id != settings.owner_telegram_id:
-        await notify_owner(
-            f"🚨 Тривога ({(c.risk_level or 'med').upper()}) від "
-            f"{ROLE_LABELS.get(user.role, user.role)} ({user.name}):\n{c.text}"
-        )
+    await route_notifications(session, user, c)
     return result
 
 
@@ -526,10 +522,6 @@ async def ingest_voice(
         raise HTTPException(status_code=422, detail="transcription failed")
     c = await classify(text, user.role)
     result = await save_classified(session, user, text, c)
-    if c.type == "risk" and user.telegram_id != settings.owner_telegram_id:
-        await notify_owner(
-            f"🚨 Тривога ({(c.risk_level or 'med').upper()}) від "
-            f"{ROLE_LABELS.get(user.role, user.role)} ({user.name}):\n{c.text}"
-        )
+    await route_notifications(session, user, c)
     result["transcript"] = text
     return result
