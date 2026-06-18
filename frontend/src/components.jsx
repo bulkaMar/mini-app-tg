@@ -162,8 +162,8 @@ export function SwipeRow({ onDelete, children }) {
   )
 }
 
-/* свайп уліво по екрану → назад (для дрілдаунів). Вертикальний скрол не чіпаємо:
-   напрям фіксуємо один раз; спрацьовує лише на чіткому горизонтальному жесті вліво. */
+/* свайп управо по екрану → назад (для дрілдаунів, як у iOS). Вертикальний скрол не чіпаємо:
+   напрям фіксуємо один раз; спрацьовує лише на чіткому горизонтальному жесті управо. */
 export function SwipeBack({ onBack, children }) {
   const s = useRef(null) // {x, y, dir: 'h'|'v'|null, fired}
 
@@ -177,7 +177,7 @@ export function SwipeBack({ onBack, children }) {
       if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
       st.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v' // визначаємо напрям один раз
     }
-    if (st.dir === 'h' && dx < -70 && Math.abs(dy) < 55) {
+    if (st.dir === 'h' && dx > 70 && Math.abs(dy) < 55) {
       st.fired = true
       haptic()
       onBack()
@@ -755,18 +755,15 @@ export function NotificationBell({ me }) {
 
   return (
     <>
-      {/* портал у body — щоб дзвіночок був жорстко прикріплений до екрана
-          (не залежав від трансформованих контейнерів) і не їхав зі скролом */}
-      {createPortal(
-        <div className="notif-wrap">
-          <button className={`notif-bell ${count ? 'has-new' : ''}`} onClick={openSheet}
-            aria-label={count ? `Сповіщення: ${count} нових` : 'Сповіщення'}>
-            {Icons.bell(22)}
-            {count > 0 && <span className="notif-badge">{count > 9 ? '9+' : count}</span>}
-          </button>
-        </div>,
-        document.body,
-      )}
+      {/* дзвіночок усередині .app (як таб-бар) — фіксований до екрана.
+          НЕ портал у body: на iOS прямий нащадок body «їде» зі скролом. */}
+      <div className="notif-wrap">
+        <button className={`notif-bell ${count ? 'has-new' : ''}`} onClick={openSheet}
+          aria-label={count ? `Сповіщення: ${count} нових` : 'Сповіщення'}>
+          {Icons.bell(22)}
+          {count > 0 && <span className="notif-badge">{count > 9 ? '9+' : count}</span>}
+        </button>
+      </div>
       {open && (
         <Sheet
           title="Сповіщення"
