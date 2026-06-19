@@ -223,21 +223,25 @@ export function Meter({ title, value, pct, level, onEdit }) {
   )
 }
 
-let toastTimer
+let toastTimer, toastTimerOut
 export function useToast() {
-  const [t, setT] = useState(null) // { msg, kind: 'info'|'ok'|'warn' }
+  const [t, setT] = useState(null) // { msg, kind: 'info'|'ok'|'warn', out }
   const show = (msg, kind = 'info') => {
-    setT({ msg, kind })
-    clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => setT(null), 2600)
+    clearTimeout(toastTimer); clearTimeout(toastTimerOut)
+    setT({ msg, kind, out: false })
+    toastTimerOut = setTimeout(() => setT((p) => (p ? { ...p, out: true } : p)), 1700) // почати плавно ховати
+    toastTimer = setTimeout(() => setT(null), 2000)
   }
-  const node = t ? (
-    <div className={`toast ${t.kind}`}>
-      {t.kind === 'ok' && Icons.check(16)}
-      {t.kind === 'warn' && Icons.alert(16)}
-      <span>{t.msg}</span>
-    </div>
-  ) : null
+  const node = t
+    ? createPortal(
+        <div className={`toast ${t.kind} ${t.out ? 'out' : ''}`}>
+          {t.kind === 'ok' && Icons.check(16)}
+          {t.kind === 'warn' && Icons.alert(16)}
+          <span>{t.msg}</span>
+        </div>,
+        document.body,
+      )
+    : null
   return [node, show]
 }
 

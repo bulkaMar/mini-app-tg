@@ -132,7 +132,7 @@ function Team() {
     try {
       await post('/api/team', { username: username.trim(), name: name.trim(), role })
       setAdding(false); setUsername(''); setName('')
-      showToast('Запрошення створено — користувач активується після /start у боті')
+      showToast('Запрошення надіслано', 'ok')
       load()
     } catch (e) { showToast(e.message, 'warn') }
   }

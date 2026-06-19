@@ -297,11 +297,13 @@ html, body {
 .btn-icon:active { color: var(--ink); transform: scale(0.92); }
 
 .toast {
-  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: calc(170px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   background: var(--ink); color: #fff; font-size: 14px; font-weight: 600;
-  border-radius: 12px; padding: 10px 16px; z-index: 50;
-  max-width: 90%; text-align: left;
+  border-radius: 999px; padding: 12px 20px; z-index: 95; /* над усім — док/таб-бар/шторки */
+  max-width: 88%; text-align: center;
   display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 8px 24px rgba(29, 26, 22, 0.28);
 }
 .toast svg { flex-shrink: 0; }
 .toast.ok svg { color: #5fd08a; }
@@ -555,6 +557,8 @@ html, body {
   to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 .toast { animation: toast-pop 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes toast-out { to { opacity: 0; transform: translate(-50%, 8px) scale(0.97); } }
+.toast.out { animation: toast-out 0.3s ease forwards; }
 
 /* оверлей запису: плавна поява + масштаб кола */
 .record-overlay { animation: overlay-in 0.2s ease both; }
