@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { Entry, Header, Icons, NotificationBell, Sheet, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast } from '../components'
+import { CenterModal, Entry, Header, Icons, NotificationBell, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -59,15 +59,12 @@ function ReportSheet({ onClose }) {
     } catch (e) { showToast(e.message, 'warn') }
   }
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <h2>Звіт зі зйомки</h2>
-        <input placeholder="Напр.: знято 3 сцени з 5, локація на чт під питанням"
-          value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-        <button className="btn-primary" style={{ background: 'var(--blue)' }} onClick={send}>Надіслати</button>
-        {toast}
-      </div>
-    </div>
+    <CenterModal title="Звіт зі зйомки" onClose={onClose}>
+      <input placeholder="Напр.: знято 3 сцени з 5, локація на чт під питанням"
+        value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
+      <button className="btn-primary" style={{ background: 'var(--blue)' }} onClick={send}>Надіслати</button>
+      {toast}
+    </CenterModal>
   )
 }
 
@@ -142,12 +139,12 @@ function Tasks() {
         {Icons.plus(18)} Додати задачу
       </button>
       {adding && (
-        <Sheet title="Нова задача" onClose={() => setAdding(false)}>
+        <CenterModal title="Нова задача" onClose={() => setAdding(false)}>
           <input placeholder="Напр.: підтвердити локацію на чт" value={text}
             onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <button className="btn-primary" style={{ background: 'var(--blue)', opacity: text.trim() ? 1 : 0.45 }}
             disabled={!text.trim()} onClick={add}>Зберегти</button>
-        </Sheet>
+        </CenterModal>
       )}
       {sel && (
         <TaskSheet t={sel} color="var(--blue)" onClose={() => setSel(null)}

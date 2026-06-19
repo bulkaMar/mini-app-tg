@@ -574,7 +574,7 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
   const remove = () => setConfirmDel(true)
 
   return (
-    <Sheet title={e.text || 'Витрата'} onClose={onClose}>
+    <CenterModal title={e.text || 'Витрата'} onClose={onClose}>
       <div className="preview-meta ico-text">
         {e.approved ? Icons.check(13) : Icons.clock(13)}
         {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.time)}
@@ -604,7 +604,7 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
           onNo={() => setConfirmDel(false)} />
       )}
       {toast}
-    </Sheet>
+    </CenterModal>
   )
 }
 
@@ -627,7 +627,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
   }
 
   return (
-    <Sheet title="Задача" onClose={onClose}>
+    <CenterModal title="Задача" onClose={onClose}>
       <div className="preview-meta ico-text">
         {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
         {t.status === 'done' ? 'виконано' : 'в роботі'} · {CAT_LABEL[t.category] || ''}
@@ -658,7 +658,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
           onNo={() => setConfirmDel(false)} />
       )}
       {toast}
-    </Sheet>
+    </CenterModal>
   )
 }
 

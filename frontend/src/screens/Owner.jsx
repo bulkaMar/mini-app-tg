@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -328,7 +328,7 @@ function Finance({ onBack }) {
       ))}
 
       {adding && (
-        <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
+        <CenterModal title="Нова витрата" onClose={() => setAdding(false)}>
           <input placeholder="На що (напр. Оренда обладнання)" value={text} onChange={(e) => setText(e.target.value)} />
           <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
           <button className="btn-primary"
@@ -337,7 +337,7 @@ function Finance({ onBack }) {
             onClick={addExpense}>
             Зберегти
           </button>
-        </Sheet>
+        </CenterModal>
       )}
       {sel && (
         <ExpenseSheet e={sel} canApprove={m.can_approve} onClose={() => setSel(null)}

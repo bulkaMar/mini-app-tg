@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, Sheet, TabBar, TaskSheet, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, usePoll, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -85,11 +85,11 @@ function Life({ me, category }) {
           onChanged={() => { setSel(null); load() }} />
       )}
       {adding && (
-        <Sheet title={isDog ? 'Нова справа про пса' : 'Нова справа'} onClose={() => setAdding(false)}>
+        <CenterModal title={isDog ? 'Нова справа про пса' : 'Нова справа'} onClose={() => setAdding(false)}>
           <input placeholder="Напр.: записати на хімчистку" value={text}
             onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={add}>Зберегти</button>
-        </Sheet>
+        </CenterModal>
       )}
       {toast}
     </div>
@@ -139,7 +139,7 @@ function Money() {
         </div>
       ))}
       {adding && (
-        <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
+        <CenterModal title="Нова витрата" onClose={() => setAdding(false)}>
           <input placeholder="На що (напр. Продукти)" value={text} onChange={(e) => setText(e.target.value)} />
           <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
           <button className="btn-primary"
@@ -147,7 +147,7 @@ function Money() {
             disabled={!text.trim() || !(Number(amount) > 0)} onClick={add}>
             Зберегти
           </button>
-        </Sheet>
+        </CenterModal>
       )}
       {sel && (
         <ExpenseSheet e={sel} canApprove={m.can_approve} color="var(--green)"
