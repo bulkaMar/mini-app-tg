@@ -41,8 +41,22 @@ html, body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-bottom: calc(88px + env(safe-area-inset-bottom)); /* місце під таб-бар */
+  padding-bottom: calc(100px + env(safe-area-inset-bottom)); /* місце під таб-бар + підкладку */
 }
+
+/* непрозора підкладка знизу: контент не просвічує за полем диктовки й таб-баром.
+   М'який перехід зверху (mask), нижче — суцільна заливка фоном. */
+.app::after {
+  content: "";
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: calc(96px + env(safe-area-inset-bottom)); /* під таб-бар */
+  background: var(--bg);
+  z-index: 38; /* над контентом, під доком(39) і таб-баром(40) */
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+}
+.app.with-dock::after { height: calc(160px + env(safe-area-inset-bottom)); } /* під док + таб-бар */
 
 .screen { padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 12px; }
 
@@ -293,13 +307,12 @@ html, body {
 .toast.warn svg { color: #ff8b7e; }
 
 /* ---------- диктовка-док над таб-баром (owner) ---------- */
-.app.with-dock .app-scroll { padding-bottom: calc(152px + env(safe-area-inset-bottom)); }
+.app.with-dock .app-scroll { padding-bottom: calc(164px + env(safe-area-inset-bottom)); }
 .dictate-dock {
   position: fixed; bottom: calc(84px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
   width: 100%; max-width: 480px;
   padding: 8px 12px 6px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--bg); /* суцільний фон — контент не просвічує за полем */
   z-index: 39;
 }
 
