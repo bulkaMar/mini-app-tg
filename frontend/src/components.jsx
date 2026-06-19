@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { get, patch, post } from './api'
 import { haptic } from './telegram'
@@ -209,9 +209,12 @@ export function TabBar({ tabs, active, onChange }) {
   return (
     <nav className="tabbar">
       {tabs.map((t) => (
-        <button key={t.key} className={active === t.key ? 'active' : ''}
+        <button key={t.key} className={`${active === t.key ? 'active' : ''}${t.badge ? ' has-badge' : ''}`}
           onClick={() => { haptic(); onChange(t.key) }}>
-          {Icons[t.icon]?.(22)}
+          <span className="tab-ico">
+            {Icons[t.icon]?.(22)}
+            {t.badge > 0 && <span className="tab-badge">{t.badge > 9 ? '9+' : t.badge}</span>}
+          </span>
           <span>{t.label}</span>
         </button>
       ))}
@@ -732,6 +735,56 @@ export function CenterModal({ title, sub, onClose, children }) {
 // зʼявились після «востаннє бачених» і не від самого користувача; позначку
 // тримаємо в localStorage, опитуємо стрічку раз на 15 с і при поверненні фокуса.
 const FEED_POLL_MS = 15000
+
+/* лічильник нових у стрічці (бейдж на табі «Потік») — та сама логіка, що й дзвіночок;
+   ділиться позначкою «бачено» через localStorage, тож обидва індикатори синхронні */
+export function useFeedUnread(me) {
+  const storeKey = `pult:feedSeen:${me?.telegram_id ?? 'x'}`
+  const dismissKey = `pult:feedDismissed:${me?.telegram_id ?? 'x'}`
+  const [feed, setFeed] = useState([])
+  const [seen, setSeen] = useState(() => {
+    const v = Number(localStorage.getItem(storeKey))
+    return localStorage.getItem(storeKey) !== null && Number.isFinite(v) ? v : null
+  })
+  const seenRef = useRef(seen)
+  seenRef.current = seen
+  const feedRef = useRef(feed)
+  feedRef.current = feed
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const f = await get('/api/feed')
+        if (!alive || !Array.isArray(f)) return
+        setFeed(f)
+        if (seenRef.current === null) {
+          const maxId = f.reduce((m, e) => Math.max(m, e.id), 0)
+          localStorage.setItem(storeKey, String(maxId))
+          setSeen(maxId)
+        }
+      } catch { /* мовчки */ }
+    }
+    load()
+    const off = onLiveChange(load)
+    const timer = setInterval(load, FEED_POLL_MS)
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => { alive = false; off(); clearInterval(timer); window.removeEventListener('focus', onFocus) }
+  }, [storeKey])
+
+  let dismissed
+  try { dismissed = new Set(JSON.parse(localStorage.getItem(dismissKey) || '[]')) } catch { dismissed = new Set() }
+  const base = seen === null ? Infinity : seen
+  const count = feed.filter((e) => e.id > base && e.role !== me?.role && !dismissed.has(e.id)).length
+
+  const markSeen = useCallback(() => {
+    const maxId = feedRef.current.reduce((m, e) => Math.max(m, e.id), 0)
+    if (maxId > 0) { localStorage.setItem(storeKey, String(maxId)); setSeen(maxId) }
+  }, [storeKey])
+
+  return { count, markSeen }
+}
 
 export function NotificationBell({ me }) {
   const storeKey = `pult:feedSeen:${me?.telegram_id ?? 'x'}`

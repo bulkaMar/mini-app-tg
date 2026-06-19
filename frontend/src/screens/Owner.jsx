@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -24,6 +24,9 @@ export default function Owner({ me }) {
   const [tab, setTab] = useState('home')
   const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
   const [refreshKey, setRefreshKey] = useState(0) // після диктовки перезавантажуємо активний екран
+  const { count: flowUnread, markSeen: markFlowSeen } = useFeedUnread(me)
+  // поки відкрито «Потік» — лічильник нових скидаємо (і при нових надходженнях теж)
+  useEffect(() => { if (tab === 'flow' && !view) markFlowSeen() }, [tab, view, flowUnread, markFlowSeen])
 
   const back = () => setView(null)
   const drill = (node) => <SwipeBack onBack={back}>{node}</SwipeBack> // свайп уліво → назад
@@ -49,7 +52,7 @@ export default function Owner({ me }) {
       <TabBar
         tabs={[
           { key: 'home', icon: 'pulse', label: 'Головна' },
-          { key: 'flow', icon: 'inbox', label: 'Потік' },
+          { key: 'flow', icon: 'inbox', label: 'Потік', badge: flowUnread },
           { key: 'team', icon: 'shield', label: 'Команда' },
           { key: 'money', icon: 'wallet', label: 'Фінанси' },
         ]}
@@ -96,12 +99,6 @@ function Home({ openView }) {
 
       <Meter title="Темп" value={LOAD_LABEL[d.load]} pct={LOAD_PCT[d.load]}
         level={d.load === 'LOW' ? 'low' : d.load === 'MED' ? 'med' : 'high'} />
-
-      <div className="section-label">Надійшло</div>
-      {d.feed.length === 0 && <div className="empty">Поки тихо</div>}
-      {d.feed.slice(0, 6).map((e) => (
-        <Entry key={e.id} e={e} label={directionLabel(e, 'owner')} />
-      ))}
     </div>
   )
 }
