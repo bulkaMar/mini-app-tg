@@ -28,6 +28,7 @@ html, body {
 #root { max-width: 480px; margin: 0 auto; }
 
 .app {
+  position: relative; /* рамка екрана — до неї кріпимо дзвіночок (absolute), а не fixed */
   height: 100vh;
   height: 100dvh;
   display: flex;
@@ -558,8 +559,7 @@ html, body {
 
 /* ---------- дзвіночок сповіщень (фіксований, зверху-справа) ---------- */
 .notif-wrap {
-  position: fixed; top: 0; left: 50%; transform: translateX(-50%);
-  width: 100%; max-width: 480px;
+  position: absolute; top: 0; left: 0; right: 0; /* кріпиться до рамки .app, не до viewport — не їде зі скролом на iOS */
   display: flex; justify-content: flex-end;
   padding: 14px 14px 0;
   z-index: 35; pointer-events: none; /* тапи проходять крізь порожнечу — лише кнопка клікабельна */
