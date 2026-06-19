@@ -7,6 +7,11 @@ import {
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
 const STATUS_TEXT = { ok: 'в нормі', warn: 'потребує уваги', crit: 'критично' }
+const MEMBER_ROLES = [
+  { value: 'manager', label: 'Менеджер — проєкти' },
+  { value: 'assistant', label: 'Асистент — побут і пес' },
+  { value: 'driver', label: 'Водій — логістика' },
+]
 
 export default function Owner({ me }) {
   const [tab, setTab] = useState('home')
@@ -134,6 +139,10 @@ function Team() {
 
   if (!team) return <div className="loading">Завантаження…</div>
   const initials = (n) => n.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+  // ролі, яких ще немає в команді — зайняту роль у дропдауні не пропонуємо
+  const used = new Set(team.map((m) => m.role))
+  const freeRoles = MEMBER_ROLES.filter((r) => !used.has(r.value))
+  const openAdd = () => { setRole(freeRoles[0]?.value || ''); setUsername(''); setName(''); setAdding(true) }
 
   return (
     <div className="screen">
@@ -163,21 +172,23 @@ function Team() {
           </div>
         ))}
       </div>
-      <button className="btn-dashed" style={{ color: 'var(--orange)' }} onClick={() => setAdding(true)}>
-        {Icons.addUser(20)} Додати учасника
-      </button>
+      {freeRoles.length > 0 ? (
+        <button className="btn-dashed" style={{ color: 'var(--orange)' }} onClick={openAdd}>
+          {Icons.addUser(20)} Додати учасника
+        </button>
+      ) : (
+        <div className="empty">Усі ролі зайняті — видали учасника, щоб додати іншого</div>
+      )}
 
       {adding && (
         <CenterModal title="Новий учасник" sub={ROLE_BADGE[role]} onClose={() => setAdding(false)}>
           <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
           <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="manager">Менеджер — проєкти</option>
-            <option value="assistant">Асистент — побут і пес</option>
-            <option value="driver">Водій — логістика</option>
+            {freeRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
           <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={invite}>
-            Надіслати запрошення
+            Додати учасника
           </button>
         </CenterModal>
       )}
