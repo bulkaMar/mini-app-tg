@@ -522,6 +522,9 @@ html, body {
   cursor: pointer; font-family: inherit; padding: 0; display: flex; align-items: center; gap: 4px;
 }
 
+/* зона свайпу-назад заповнює весь екран, щоб жест ловився навіть де контенту мало */
+.swipe-back { min-height: calc(100dvh - 100px); }
+
 /* ================= анімації ================= */
 
 /* поява елементів екрана каскадом (вкладки, дрілдауни, нові записи) */

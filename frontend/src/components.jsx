@@ -199,7 +199,7 @@ export function SwipeBack({ onBack, children }) {
   const onEnd = () => { s.current = null }
 
   return (
-    <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd}>
+    <div className="swipe-back" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd}>
       {children}
     </div>
   )
