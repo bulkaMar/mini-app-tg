@@ -10,7 +10,6 @@ export const MOCK = {
   '/api/dashboard': {
     statuses: { production: 'ok', life: 'warn', money: 'ok', risk: 'crit' },
     counts: { open_tasks: 6, life_open: 3, production_open: 3, risk_active: 2, spent: 12400, budget: 17000, budget_pct: 73 },
-    people: { manager: 'Маша', assistant: 'Коля' },
     load: 'MED',
     feed: [
       { id: 5, role: 'owner', role_label: 'власник', target_role: 'assistant', type: 'task', category: 'dog', text: 'Купити корм псу', time: '2026-06-10T09:50:00' },

@@ -13,6 +13,13 @@ const MEMBER_ROLES = [
   { value: 'driver', label: 'Водій — логістика' },
 ]
 
+// ім'я активного учасника певної ролі (перше слово) + підпис у шапці сторінки
+const memberName = (team, role) => {
+  const u = (team || []).find((m) => m.role === role && m.status === 'active')
+  return u && u.name ? u.name.split(' ')[0] : ''
+}
+const roleSub = (role, name, tail) => `${name ? `${role} · ${name}` : role} · ${tail}`
+
 export default function Owner({ me }) {
   const [tab, setTab] = useState('home')
   const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
@@ -61,14 +68,12 @@ function Home({ openView }) {
 
   if (!d) return <div className="loading">Завантаження…</div>
   const { statuses: s, counts: c } = d
-  const people = d.people || {}
-  const who = (role, name) => (name ? `${role} · ${name.split(' ')[0]}` : role)
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
 
   const rows = [
-    { key: 'production', icon: 'film', title: 'Проєкти', who: who('Менеджер', people.manager), value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
-    { key: 'life', icon: 'home', title: 'Побут', who: who('Асистент', people.assistant), value: `${c.life_open} справи`, cls: s.life, view: 'life' },
+    { key: 'production', icon: 'film', title: 'Проєкти', value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
+    { key: 'life', icon: 'home', title: 'Побут', value: `${c.life_open} справи`, cls: s.life, view: 'life' },
     { key: 'money', icon: 'wallet', title: 'Фінанси', value: `${c.budget_pct}%`, cls: s.money, view: 'money' },
     { key: 'risk', icon: 'alert', title: 'Тривоги', value: `${c.risk_active} активні`, cls: s.risk, view: 'risks' },
   ]
@@ -81,10 +86,7 @@ function Home({ openView }) {
         <button key={r.key} className="status-row" onClick={() => openView(r.view)}>
           <span className={`dot ${r.cls}`} />
           <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons[r.icon](20)}</span>
-          <span className="sr-text">
-            <span className="sr-title">{r.title}</span>
-            {r.who && <span className="sr-who">{r.who}</span>}
-          </span>
+          {r.title}
           <span className="chev">
             <span className={`value tag ${r.cls}`}>{r.value}</span>
             ›
@@ -418,10 +420,12 @@ function BudgetSheet({ onClose, onSaved }) {
 function Projects({ onBack }) {
   const [tasks, setTasks] = useState(null)
   const [feed, setFeed] = useState([])
+  const [team, setTeam] = useState([])
   const [sel, setSel] = useState(null)
   const load = useCallback(() => {
     get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([]))
     get('/api/feed').then((f) => setFeed(f.filter((e) => e.category === 'production'))).catch(() => {})
+    get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
   if (!tasks) return <div className="loading">Завантаження…</div>
@@ -429,7 +433,7 @@ function Projects({ onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon="film" color="var(--blue)" title="Проєкти" sub={`${open.length} активні`} />
+      <Header icon="film" color="var(--blue)" title="Проєкти" sub={roleSub('Менеджер', memberName(team, 'manager'), `${open.length} активні`)} />
       <div className="section-label">Активні</div>
       {open.length === 0 && <div className="empty">Активних задач немає</div>}
       {open.map((t) => (
@@ -448,12 +452,14 @@ function Projects({ onBack }) {
 /* ---------- дрілдаун: Побут ---------- */
 function Life({ onBack }) {
   const [tasks, setTasks] = useState(null)
+  const [team, setTeam] = useState([])
   const [sel, setSel] = useState(null)
   const load = useCallback(() => {
     Promise.all([
       get('/api/tasks?category=life').catch(() => []),
       get('/api/tasks?category=dog').catch(() => []),
     ]).then(([a, b]) => setTasks([...a, ...b]))
+    get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
   if (!tasks) return <div className="loading">Завантаження…</div>
@@ -462,7 +468,7 @@ function Life({ onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon="home" color="var(--green)" title="Побут" sub={`${open.length} справи`} />
+      <Header icon="home" color="var(--green)" title="Побут" sub={roleSub('Асистент', memberName(team, 'assistant'), `${open.length} справи`)} />
       <div className="section-label">На сьогодні</div>
       {open.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Все зроблено</span></div>}
       {open.map((t) => (
