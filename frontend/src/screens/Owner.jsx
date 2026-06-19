@@ -168,7 +168,7 @@ function Team() {
       </button>
 
       {adding && (
-        <Sheet title="Новий учасник" onClose={() => setAdding(false)}>
+        <CenterModal title="Новий учасник" sub={ROLE_BADGE[role]} onClose={() => setAdding(false)}>
           <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
           <select value={role} onChange={(e) => setRole(e.target.value)}>
@@ -179,7 +179,7 @@ function Team() {
           <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={invite}>
             Надіслати запрошення
           </button>
-        </Sheet>
+        </CenterModal>
       )}
       {sel && (
         <MemberSheet m={sel} onClose={() => setSel(null)}
