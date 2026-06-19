@@ -736,6 +736,12 @@ export function CenterModal({ title, sub, onClose, children }) {
 // тримаємо в localStorage, опитуємо стрічку раз на 15 с і при поверненні фокуса.
 const FEED_POLL_MS = 15000
 
+/* спільний сигнал «позначку бачено змінено» — щоб таб «Потік» і дзвіночок
+   скидались одночасно (а не чекали наступного опитування) */
+const _seenSubs = new Set()
+function onSeenChange(fn) { _seenSubs.add(fn); return () => _seenSubs.delete(fn) }
+function fireSeenChange() { _seenSubs.forEach((fn) => { try { fn() } catch { /* ok */ } }) }
+
 /* лічильник нових у стрічці (бейдж на табі «Потік») — та сама логіка, що й дзвіночок;
    ділиться позначкою «бачено» через localStorage, тож обидва індикатори синхронні */
 export function useFeedUnread(me) {
@@ -773,6 +779,12 @@ export function useFeedUnread(me) {
     return () => { alive = false; off(); clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [storeKey])
 
+  // інший індикатор (дзвіночок) позначив бачено — підхоплюємо одразу
+  useEffect(() => onSeenChange(() => {
+    const v = Number(localStorage.getItem(storeKey))
+    if (localStorage.getItem(storeKey) !== null && Number.isFinite(v)) setSeen(v)
+  }), [storeKey])
+
   let dismissed
   try { dismissed = new Set(JSON.parse(localStorage.getItem(dismissKey) || '[]')) } catch { dismissed = new Set() }
   const base = seen === null ? Infinity : seen
@@ -780,7 +792,7 @@ export function useFeedUnread(me) {
 
   const markSeen = useCallback(() => {
     const maxId = feedRef.current.reduce((m, e) => Math.max(m, e.id), 0)
-    if (maxId > 0) { localStorage.setItem(storeKey, String(maxId)); setSeen(maxId) }
+    if (maxId > 0) { localStorage.setItem(storeKey, String(maxId)); setSeen(maxId); fireSeenChange() }
   }, [storeKey])
 
   return { count, markSeen }
@@ -832,6 +844,12 @@ export function NotificationBell({ me }) {
     return () => { alive = false; off(); clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [storeKey])
 
+  // таб «Потік» (або інший індикатор) позначив бачено — підхоплюємо одразу
+  useEffect(() => onSeenChange(() => {
+    const v = Number(localStorage.getItem(storeKey))
+    if (localStorage.getItem(storeKey) !== null && Number.isFinite(v)) setSeen(v)
+  }), [storeKey])
+
   const base = seen === null ? Infinity : seen // поки позначку не зчитано — нічого не «нове»
   const fresh = feed.filter((e) => e.id > base && e.role !== me?.role && !dismissed.has(e.id))
   const count = fresh.length
@@ -845,6 +863,7 @@ export function NotificationBell({ me }) {
     const maxId = feed.reduce((m, e) => Math.max(m, e.id), seen ?? 0)
     localStorage.setItem(storeKey, String(maxId))
     setSeen(maxId)
+    fireSeenChange()
     setOpen(true)
   }
 

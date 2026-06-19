@@ -84,7 +84,6 @@ function Home({ openView }) {
   const rows = [
     { key: 'production', icon: 'film', title: 'Проєкти', value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
     { key: 'life', icon: 'home', title: 'Побут', value: `${c.life_open} справи`, cls: s.life, view: 'life' },
-    { key: 'money', icon: 'wallet', title: 'Фінанси', value: `${c.budget_pct}%`, cls: s.money, view: 'money' },
     { key: 'risk', icon: 'alert', title: 'Тривоги', value: `${c.risk_active} активні`, cls: s.risk, view: 'risks' },
   ]
 
