@@ -68,7 +68,20 @@ export function entryColor(e) {
 export function fmtTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
-  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+  const now = new Date()
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+  const diff = Math.round((day(now) - day(d)) / 86400000) // різниця в днях
+  if (diff <= 0) return time // сьогодні
+  if (diff === 1) return `Вчора ${time}`
+  if (diff < 7) {
+    const wd = d.toLocaleDateString('uk-UA', { weekday: 'long' })
+    return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${time}`
+  }
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  if (d.getFullYear() === now.getFullYear()) return `${dd}.${mm} ${time}`
+  return `${dd}.${mm}.${d.getFullYear()} ${time}`
 }
 
 /* ---------- спільні блоки ---------- */

@@ -61,12 +61,14 @@ function Home({ openView }) {
 
   if (!d) return <div className="loading">Завантаження…</div>
   const { statuses: s, counts: c } = d
+  const people = d.people || {}
+  const who = (role, name) => (name ? `${role} · ${name.split(' ')[0]}` : role)
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
 
   const rows = [
-    { key: 'production', icon: 'film', title: 'Проєкти', value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
-    { key: 'life', icon: 'home', title: 'Побут', value: `${c.life_open} справи`, cls: s.life, view: 'life' },
+    { key: 'production', icon: 'film', title: 'Проєкти', who: who('Менеджер', people.manager), value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
+    { key: 'life', icon: 'home', title: 'Побут', who: who('Асистент', people.assistant), value: `${c.life_open} справи`, cls: s.life, view: 'life' },
     { key: 'money', icon: 'wallet', title: 'Фінанси', value: `${c.budget_pct}%`, cls: s.money, view: 'money' },
     { key: 'risk', icon: 'alert', title: 'Тривоги', value: `${c.risk_active} активні`, cls: s.risk, view: 'risks' },
   ]
@@ -79,7 +81,10 @@ function Home({ openView }) {
         <button key={r.key} className="status-row" onClick={() => openView(r.view)}>
           <span className={`dot ${r.cls}`} />
           <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons[r.icon](20)}</span>
-          {r.title}
+          <span className="sr-text">
+            <span className="sr-title">{r.title}</span>
+            {r.who && <span className="sr-who">{r.who}</span>}
+          </span>
           <span className="chev">
             <span className={`value tag ${r.cls}`}>{r.value}</span>
             ›

@@ -97,6 +97,14 @@ async def compute_dashboard(session: AsyncSession) -> dict:
         for m, name in feed_rows
     ]
 
+    # хто на якій ролі (активні учасники) — для підпису на картках напрямків
+    members = (
+        await session.execute(
+            select(User.role, User.name).where(User.status == "active", User.role != "owner")
+        )
+    ).all()
+    people = {role: name for role, name in members if name}
+
     return {
         "statuses": statuses,
         "counts": {
@@ -110,4 +118,5 @@ async def compute_dashboard(session: AsyncSession) -> dict:
         },
         "load": load,
         "feed": feed,
+        "people": people,
     }
