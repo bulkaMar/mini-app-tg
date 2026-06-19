@@ -534,6 +534,8 @@ html, body {
   color: var(--ink); outline: none;
 }
 .center-modal-body textarea { min-height: 90px; resize: vertical; } /* щоб текст не обрізало */
+/* поле дати на iOS: знімаємо «нативний» вигляд, щоб не було високим/по центру/підрізаним */
+.center-modal-body input[type="date"] { -webkit-appearance: none; appearance: none; text-align: left; }
 
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 0; }
 .loading { text-align: center; color: var(--muted); padding: 48px 0; font-size: 14px; }
