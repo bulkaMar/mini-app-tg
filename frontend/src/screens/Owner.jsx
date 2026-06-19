@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -298,6 +298,16 @@ function Finance({ onBack }) {
   if (!m) return <div className="loading">Завантаження…</div>
   const monthName = new Date().toLocaleDateString('uk-UA', { month: 'long' })
 
+  // розподіл витрат за напрямом (для кругової діаграми)
+  const AREA = { manager: ['Проєкти', 'var(--blue)'], assistant: ['Побут', 'var(--green)'], driver: ['Логістика', 'var(--gold)'], owner: ['Інше', 'var(--orange)'] }
+  const byArea = {}
+  ;(m.expenses || []).forEach((e) => { byArea[e.owner_role] = (byArea[e.owner_role] || 0) + (e.amount || 0) })
+  const donutData = Object.entries(byArea)
+    .filter(([, v]) => v > 0)
+    .map(([role, v]) => ({ label: (AREA[role] || [role])[0], color: (AREA[role] || [role, 'var(--muted)'])[1], value: Math.round(v) }))
+    .sort((a, b) => b.value - a.value)
+  const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
+
   return (
     <div className="screen">
       {onBack && <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>}
@@ -309,6 +319,12 @@ function Finance({ onBack }) {
       <Meter title="Бюджет місяця" value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
         pct={m.budget_pct} level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'}
         onEdit={() => setEditBudget(true)} />
+      {donutData.length > 0 && (
+        <div className="card">
+          <div className="donut-title">На що йдуть гроші</div>
+          <DonutChart data={donutData} centerValue={`${donutTotal.toLocaleString('uk-UA')} ₴`} centerCap="всього" />
+        </div>
+      )}
       <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={() => setAdding(true)}>
         {Icons.plus(20)} Додати витрату
       </button>

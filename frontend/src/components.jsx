@@ -239,6 +239,47 @@ export function Meter({ title, value, pct, level, onEdit }) {
   )
 }
 
+/* ---------- кругова діаграма витрат (donut) з анімацією появи ---------- */
+export function DonutChart({ data, centerValue, centerCap }) {
+  const [grow, setGrow] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setGrow(true), 60); return () => clearTimeout(t) }, [])
+  const sum = data.reduce((s, d) => s + d.value, 0) || 1
+  let start = 0
+  const slices = data.map((d) => {
+    const pct = (d.value / sum) * 100
+    const s = { color: d.color, label: d.label, value: d.value, start, pctRound: Math.round(pct), len: Math.max(pct - 1.2, 0.6) }
+    start += pct
+    return s
+  })
+  return (
+    <div className="donut-wrap">
+      <div className="donut">
+        <svg viewBox="0 0 100 100" className="donut-svg">
+          <circle className="donut-track" cx="50" cy="50" r="42" pathLength="100" />
+          {slices.map((s, i) => (
+            <circle key={i} cx="50" cy="50" r="42" className="donut-slice" stroke={s.color} pathLength="100"
+              strokeDasharray={grow ? `${s.len} ${100 - s.len}` : '0 100'}
+              strokeDashoffset={-s.start} style={{ transitionDelay: `${i * 0.1}s` }} />
+          ))}
+        </svg>
+        <div className="donut-center">
+          <div className="donut-total">{centerValue}</div>
+          {centerCap && <div className="donut-cap">{centerCap}</div>}
+        </div>
+      </div>
+      <div className="donut-legend">
+        {slices.map((s, i) => (
+          <div className="donut-leg" key={i}>
+            <span className="donut-leg-dot" style={{ background: s.color }} />
+            <span className="donut-leg-label">{s.label}</span>
+            <span className="donut-leg-val">{s.value.toLocaleString('uk-UA')} ₴ · {s.pctRound}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 let toastTimer, toastTimerOut
 export function useToast() {
   const [t, setT] = useState(null) // { msg, kind: 'info'|'ok'|'warn', out }
