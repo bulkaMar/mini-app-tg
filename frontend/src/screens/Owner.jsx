@@ -384,7 +384,7 @@ function BudgetSheet({ onClose, onSaved }) {
   }
 
   return (
-    <Sheet title="Бюджет місяця" onClose={onClose}>
+    <CenterModal title="Бюджет місяця" onClose={onClose}>
       {!items && <div className="loading" style={{ padding: '16px 0' }}>Завантаження…</div>}
       {items && (
         <>
@@ -409,7 +409,7 @@ function BudgetSheet({ onClose, onSaved }) {
         </>
       )}
       {toast}
-    </Sheet>
+    </CenterModal>
   )
 }
 
