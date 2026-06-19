@@ -41,9 +41,9 @@ export const MOCK = {
   '/api/money': {
     spent: 12400, budget: 17000, budget_pct: 73, can_approve: role === 'owner',
     expenses: [
-      { id: 1, text: 'Оренда обладнання', amount: 4500, currency: 'UAH', approved: false, comment: '', mine: false, owner_role: 'manager', time: '2026-06-10T09:40:00' },
-      { id: 2, text: 'Паливо', amount: 1100, currency: 'UAH', approved: true, comment: 'Заправляйся на ОККО — там дешевше', mine: role === 'driver', owner_role: 'driver', time: '2026-06-10T08:40:00' },
-      { id: 3, text: 'Продукти', amount: 480, currency: 'UAH', approved: true, comment: '', mine: role === 'assistant', owner_role: 'assistant', time: '2026-06-10T09:05:00' },
+      { id: 1, text: 'Оренда обладнання', amount: 4500, currency: 'UAH', approved: false, approved_at: null, comment: '', mine: false, owner_role: 'manager', time: '2026-06-10T09:40:00' },
+      { id: 2, text: 'Паливо', amount: 1100, currency: 'UAH', approved: true, approved_at: '2026-06-10T18:25:00', comment: 'Заправляйся на ОККО — там дешевше', mine: role === 'driver', owner_role: 'driver', time: '2026-06-10T08:40:00' },
+      { id: 3, text: 'Продукти', amount: 480, currency: 'UAH', approved: true, approved_at: '2026-06-10T12:10:00', comment: '', mine: role === 'assistant', owner_role: 'assistant', time: '2026-06-10T09:05:00' },
     ],
   },
   '/api/budget': {

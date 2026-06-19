@@ -273,6 +273,7 @@ async def money(
                 "amount": e.amount,
                 "currency": e.currency,
                 "approved": e.approved,
+                "approved_at": e.approved_at.isoformat() if e.approved_at else None,
                 "comment": e.comment or "",
                 "mine": e.telegram_id == user.telegram_id,
                 "owner_role": e.owner_role,
@@ -332,6 +333,7 @@ async def update_expense(
             raise HTTPException(status_code=403, detail="approve not allowed")
         e.approved = body["approved"]
         e.approver_id = user.telegram_id if body["approved"] else None
+        e.approved_at = datetime.now(timezone.utc) if body["approved"] else None
     if body.get("deleted"):
         if not (can_approve or e.telegram_id == user.telegram_id):
             raise HTTPException(status_code=403, detail="delete not allowed")
@@ -353,6 +355,7 @@ async def approve_expense(
         raise HTTPException(status_code=404)
     e.approved = True
     e.approver_id = user.telegram_id
+    e.approved_at = datetime.now(timezone.utc)
     await session.commit()
     return {"ok": True}
 

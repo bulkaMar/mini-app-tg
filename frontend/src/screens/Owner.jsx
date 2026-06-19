@@ -20,6 +20,13 @@ const memberName = (team, role) => {
 }
 const roleSub = (role, name, tail) => `${name ? `${role} · ${name}` : role} · ${tail}`
 
+// підпис «хто додав» (роль · ім'я) для витрати
+const ROLE_WORD = { owner: 'Власник', manager: 'Менеджер', assistant: 'Асистент', driver: 'Водій' }
+const authorLabel = (role, team) => {
+  const n = memberName(team, role)
+  return n ? `${ROLE_WORD[role] || role} · ${n}` : (ROLE_WORD[role] || role)
+}
+
 export default function Owner({ me }) {
   const [tab, setTab] = useState('home')
   const [view, setView] = useState(null) // дрілдаун: production | life | risks | money
@@ -262,6 +269,7 @@ function MemberSheet({ m, onClose, onChanged }) {
 /* ---------- Фінанси ---------- */
 function Finance({ onBack }) {
   const [m, setM] = useState(null)
+  const [team, setTeam] = useState([])
   const [adding, setAdding] = useState(false)
   const [sel, setSel] = useState(null) // вибрана витрата → шторка з коментарем
   const [editBudget, setEditBudget] = useState(false)
@@ -269,7 +277,10 @@ function Finance({ onBack }) {
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
 
-  const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
+  const load = useCallback(() => {
+    get('/api/money').then(setM).catch(() => {})
+    get('/api/team').then(setTeam).catch(() => {})
+  }, [])
   usePoll(load)
 
   const addExpense = async () => {
@@ -311,6 +322,7 @@ function Finance({ onBack }) {
           <span className="ico">{e.owner_role === 'driver' ? Icons.fuel(19) : e.owner_role === 'assistant' ? Icons.cart(19) : Icons.film(19)}</span>
           <span className="grow">
             {e.text || 'Витрата'}
+            <span className="row-sub">{authorLabel(e.owner_role, team)}</span>
             {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
           </span>
           <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>

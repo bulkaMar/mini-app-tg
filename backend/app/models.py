@@ -80,6 +80,7 @@ class Expense(Base):
     currency: Mapped[str] = mapped_column(String(10), default="UAH")
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     approver_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # коли востаннє підтверджено
     comment: Mapped[str] = mapped_column(Text, default="")  # напр. «наступного разу купи дешевше»
     owner_role: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -577,7 +577,7 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
     <CenterModal title={e.text || 'Витрата'} onClose={onClose}>
       <div className="preview-meta ico-text">
         {e.approved ? Icons.check(13) : Icons.clock(13)}
-        {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.time)}
+        {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.approved && e.approved_at ? e.approved_at : e.time)}
       </div>
       <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" invalid={!amountValid} />
       <textarea rows={3} value={comment} onChange={(ev) => setComment(ev.target.value)}

@@ -16,6 +16,7 @@ SessionMaker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 # create_all не змінює наявні таблиці, тож додаємо колонки руками — ідемпотентно.
 _ADD_COLUMNS = [
     ("messages", "target_role", "VARCHAR(20)"),
+    ("expenses", "approved_at", "TIMESTAMP"),
 ]
 
 

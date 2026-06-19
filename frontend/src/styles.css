@@ -153,6 +153,7 @@ html, body {
 .item .amount { font-family: var(--mono); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .item.done { opacity: 0.55; }
 .item.done .grow { text-decoration: line-through; }
+.item .row-sub { display: block; font-size: 12.5px; font-weight: 500; color: var(--muted); margin-top: 2px; }
 
 .tag.ok { color: var(--green); }
 .tag.warn { color: var(--warn); }
