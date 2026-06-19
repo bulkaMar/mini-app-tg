@@ -143,6 +143,7 @@ function Team() {
   const used = new Set(team.map((m) => m.role))
   const freeRoles = MEMBER_ROLES.filter((r) => !used.has(r.value))
   const openAdd = () => { setRole(freeRoles[0]?.value || ''); setUsername(''); setName(''); setAdding(true) }
+  const canInvite = username.trim() && name.trim() // кнопка активна лише коли заповнені поля
 
   return (
     <div className="screen">
@@ -187,7 +188,8 @@ function Team() {
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             {freeRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
-          <button className="btn-primary" style={{ background: 'var(--orange)' }} onClick={invite}>
+          <button className="btn-primary" style={{ background: 'var(--orange)', opacity: canInvite ? 1 : 0.45 }}
+            disabled={!canInvite} onClick={invite}>
             Додати учасника
           </button>
         </CenterModal>
