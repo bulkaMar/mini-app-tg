@@ -23,18 +23,18 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  height: 100%;
+  overflow: hidden; /* сторінка НІКОЛИ не гортається — лише внутрішній .app-scroll (iOS) */
 }
 
-#root { max-width: 480px; margin: 0 auto; }
+#root { max-width: 480px; margin: 0 auto; height: 100%; }
 
 .app {
   position: relative; /* рамка екрана — до неї кріпимо дзвіночок (absolute), а не fixed */
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* сторінка сама НЕ гортається — лише внутрішній .app-scroll,
-                       щоб фіксовані елементи (дзвіночок, таб-бар, док) не їхали зі скролом на iOS */
+  overflow: hidden; /* гортається лише внутрішній .app-scroll, тож дзвіночок/таб-бар/док не їдуть */
 }
 .app-scroll {
   flex: 1 1 auto;
