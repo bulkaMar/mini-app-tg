@@ -524,13 +524,16 @@ html, body {
 }
 .center-modal-body {
   display: flex; flex-direction: column; gap: 10px;
-  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  overflow-y: auto; overflow-x: hidden; /* без горизонтального «листання» вікна */
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
 .center-modal-body input, .center-modal-body select, .center-modal-body textarea {
-  width: 100%; background: var(--card); border: 1px solid var(--line);
+  width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; /* поле дати на iOS не розпирає вікно */
+  background: var(--card); border: 1px solid var(--line);
   border-radius: 12px; padding: 13px 14px; font-size: 15px; font-family: inherit;
   color: var(--ink); outline: none;
 }
+.center-modal-body textarea { min-height: 90px; resize: vertical; } /* щоб текст не обрізало */
 
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 0; }
 .loading { text-align: center; color: var(--muted); padding: 48px 0; font-size: 14px; }
