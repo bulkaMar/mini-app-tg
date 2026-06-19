@@ -67,7 +67,7 @@ function Shift({ me }) {
 
   return (
     <div className="screen">
-      <Header icon="truck" color="var(--gold)" title={`Привіт, ${me.name?.split(' ')[0] || ''}`} sub="зміна · сьогодні" />
+      <Header icon="truck" color="var(--gold)" title={`Привіт, ${me.name?.split(' ')[0] || ''}`} sub={me.role_label} />
       <div className="stat-grid">
         <div className="stat"><div className="num">{doneToday || today.length}</div><div className="lbl">подачі</div></div>
         <div className="stat"><div className="num">{Math.round(fuelToday).toLocaleString('uk-UA')}<small> ₴</small></div><div className="lbl">паливо сьогодні</div></div>

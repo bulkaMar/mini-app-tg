@@ -56,7 +56,7 @@ function Life({ me, category }) {
     <div className="screen">
       <Header icon={isDog ? 'dog' : 'home'} color="var(--green)"
         title={isDog ? 'Пес' : `Привіт, ${me.name?.split(' ')[0] || ''}`}
-        sub={isDog ? 'все про собаку' : 'побут · пес'} />
+        sub={isDog ? 'все про собаку' : me.role_label} />
       <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={() => setAdding(true)}>
         {Icons.plus(20)} Додати справу
       </button>

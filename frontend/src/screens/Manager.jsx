@@ -34,7 +34,7 @@ function Project({ me }) {
   if (!feed) return <div className="loading">Завантаження…</div>
   return (
     <div className="screen">
-      <Header icon="film" color="var(--blue)" title={`Привіт, ${me.name?.split(' ')[0] || 'колего'}`} sub="проєкти · сьогодні" />
+      <Header icon="film" color="var(--blue)" title={`Привіт, ${me.name?.split(' ')[0] || 'колего'}`} sub={me.role_label} />
       <button className="btn-primary" style={{ background: 'var(--blue)' }} onClick={() => setReport(true)}>
         {Icons.plus(20)} Звіт зі зйомки
       </button>
