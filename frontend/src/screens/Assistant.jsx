@@ -87,7 +87,7 @@ function Life({ me, category }) {
       {adding && (
         <Sheet title={isDog ? 'Нова справа про пса' : 'Нова справа'} onClose={() => setAdding(false)}>
           <input placeholder="Напр.: записати на хімчистку" value={text}
-            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} autoFocus />
+            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
           <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={add}>Зберегти</button>
         </Sheet>
       )}
@@ -140,7 +140,7 @@ function Money() {
       ))}
       {adding && (
         <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
-          <input placeholder="На що (напр. Продукти)" value={text} autoFocus onChange={(e) => setText(e.target.value)} />
+          <input placeholder="На що (напр. Продукти)" value={text} onChange={(e) => setText(e.target.value)} />
           <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
           <button className="btn-primary"
             style={{ background: 'var(--green)', opacity: text.trim() && Number(amount) > 0 ? 1 : 0.45 }}

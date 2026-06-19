@@ -497,7 +497,7 @@ export function Dictate({ placeholder = 'Продиктуй або напиши�
 /* ---------- грошове поле: «12 000 ₴» прямо під час вводу, курсор перед ₴ ---------- */
 const HRV_SUFFIX = ' ₴'
 
-export function MoneyInput({ value, onChange, placeholder = 'Сума, ₴', autoFocus, invalid }) {
+export function MoneyInput({ value, onChange, placeholder = 'Сума, ₴', invalid }) {
   // value — рядок із цифр ('12000'); у полі показуємо '12 000 ₴', назад віддаємо чисті цифри
   const ref = useRef(null)
   const display = value
@@ -525,7 +525,7 @@ export function MoneyInput({ value, onChange, placeholder = 'Сума, ₴', aut
     <div className={`money-input ${invalid ? 'invalid' : ''}`}>
       <input ref={ref} type="text" inputMode="numeric" placeholder={placeholder}
         value={display} onChange={handle} onFocus={() => setTimeout(placeCursor, 0)}
-        onClick={placeCursor} autoFocus={autoFocus} />
+        onClick={placeCursor} />
     </div>
   )
 }
@@ -560,7 +560,7 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
         {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.time)}
       </div>
       <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" invalid={!amountValid} />
-      <textarea rows={3} autoFocus value={comment} onChange={(ev) => setComment(ev.target.value)}
+      <textarea rows={3} value={comment} onChange={(ev) => setComment(ev.target.value)}
         placeholder="Коментар (напр.: наступного разу купи дешевше)" />
       <button className="btn-primary" style={{ background: color, opacity: changed && amountValid ? 1 : 0.45 }}
         onClick={() => save()} disabled={busy || !changed || !amountValid}>
@@ -612,7 +612,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
         {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
         {t.status === 'done' ? 'виконано' : 'в роботі'} · {CAT_LABEL[t.category] || ''}
       </div>
-      <textarea rows={3} autoFocus value={text} onChange={(e) => setText(e.target.value)}
+      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
         placeholder="Текст задачі" />
       <label className="transcript-hint">Дедлайн (необов'язково)</label>
       <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
@@ -682,6 +682,31 @@ export function Sheet({ title, onClose, children, action }) {
         <div className="sheet-body">{children}</div>
       </div>
     </div>
+  )
+}
+
+/* ---------- віконце по центру екрана (не знизу): підпис-роль у шапці ---------- */
+export function CenterModal({ title, sub, onClose, children }) {
+  useEffect(() => {
+    const h = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+  useLockScroll()
+  return createPortal(
+    <div className="overlay center-modal-wrap" onClick={onClose}>
+      <div className="center-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="center-modal-head">
+          <div className="center-modal-titles">
+            <h2>{title}</h2>
+            {sub && <div className="center-modal-sub">{sub}</div>}
+          </div>
+          <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
+        </div>
+        <div className="center-modal-body">{children}</div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 

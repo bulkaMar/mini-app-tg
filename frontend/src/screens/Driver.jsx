@@ -39,7 +39,7 @@ function AddTripSheet({ onClose }) {
   }
   return (
     <Sheet title="Нова поїздка" onClose={() => onClose(false)}>
-      <input placeholder="Напр.: забрати оператора о 9:00" value={text} autoFocus
+      <input placeholder="Напр.: забрати оператора о 9:00" value={text}
         onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
       <button className="btn-primary" style={{ background: 'var(--gold)', opacity: text.trim() ? 1 : 0.45 }}
         disabled={!text.trim()} onClick={add}>Зберегти</button>
@@ -168,7 +168,7 @@ function Money() {
       ))}
       {adding && (
         <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
-          <input placeholder="На що (напр. Паливо)" value={text} autoFocus onChange={(e) => setText(e.target.value)} />
+          <input placeholder="На що (напр. Паливо)" value={text} onChange={(e) => setText(e.target.value)} />
           <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
           <button className="btn-primary"
             style={{ background: 'var(--gold)', opacity: text.trim() && Number(amount) > 0 ? 1 : 0.45 }}

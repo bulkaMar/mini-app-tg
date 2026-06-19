@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, Sheet, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -213,11 +213,12 @@ function MemberSheet({ m, onClose, onChanged }) {
   }
 
   return (
-    <Sheet title={m.name || `@${m.username}`} onClose={onClose}>
-      <div className="preview-meta">
-        {m.status === 'invited' ? 'запрошення надіслано — чекає /start у боті' : 'активний учасник'}
-      </div>
-      <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+    <CenterModal
+      title={m.name || `@${m.username}`}
+      sub={`${ROLE_BADGE[role] || ''}${m.status === 'invited' ? ' · запрошення' : ''}`}
+      onClose={onClose}
+    >
+      <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
       <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
       <select value={role} onChange={(e) => setRole(e.target.value)}>
         <option value="manager">Менеджер — проєкти</option>
@@ -237,7 +238,7 @@ function MemberSheet({ m, onClose, onChanged }) {
           onNo={() => setConfirmDel(false)} />
       )}
       {toast}
-    </Sheet>
+    </CenterModal>
   )
 }
 
@@ -311,7 +312,7 @@ function Finance({ onBack }) {
 
       {adding && (
         <Sheet title="Нова витрата" onClose={() => setAdding(false)}>
-          <input placeholder="На що (напр. Оренда обладнання)" value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+          <input placeholder="На що (напр. Оренда обладнання)" value={text} onChange={(e) => setText(e.target.value)} />
           <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" />
           <button className="btn-primary"
             style={{ background: 'var(--orange)', opacity: text.trim() && Number(amount) > 0 ? 1 : 0.45 }}
@@ -373,7 +374,7 @@ function BudgetSheet({ onClose, onSaved }) {
           {items.map((it, idx) => (
             <div key={idx} className="budget-row">
               <input placeholder="На що (напр. Продакшн)" value={it.name}
-                onChange={(e) => upd(idx, 'name', e.target.value)} autoFocus={idx === items.length - 1 && !it.name} />
+                onChange={(e) => upd(idx, 'name', e.target.value)} />
               <MoneyInput value={it.amount} onChange={(v) => upd(idx, 'amount', v)} placeholder="Сума" />
               <button className="btn-icon" aria-label="Прибрати секцію" onClick={() => removeRow(idx)}>
                 {Icons.trash(16)}
