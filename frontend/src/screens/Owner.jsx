@@ -6,7 +6,15 @@ import {
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
-const STATUS_TEXT = { ok: 'в нормі', warn: 'потребує уваги', crit: 'критично' }
+// українське відмінювання: 1 справа · 3 справи · 8 справ
+const plural = (n, one, few, many) => {
+  const a = n % 10, b = n % 100
+  if (a === 1 && b !== 11) return one
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few
+  return many
+}
+const spravy = (n) => `${n} ${plural(n, 'справа', 'справи', 'справ')}`
+const aktyvni = (n) => `${n} ${plural(n, 'активна', 'активні', 'активних')}`
 const MEMBER_ROLES = [
   { value: 'manager', label: 'Менеджер' },
   { value: 'assistant', label: 'Асистент' },
@@ -82,9 +90,9 @@ function Home({ openView }) {
   const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
 
   const rows = [
-    { key: 'production', icon: 'film', title: 'Проєкти', value: STATUS_TEXT[s.production], cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
-    { key: 'life', icon: 'home', title: 'Побут', value: `${c.life_open} справи`, cls: s.life, view: 'life' },
-    { key: 'risk', icon: 'alert', title: 'Тривоги', value: `${c.risk_active} активні`, cls: s.risk, view: 'risks' },
+    { key: 'production', icon: 'film', title: 'Проєкти', value: spravy(c.production_open), cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
+    { key: 'life', icon: 'home', title: 'Побут', value: spravy(c.life_open), cls: s.life, view: 'life' },
+    { key: 'risk', icon: 'alert', title: 'Тривоги', value: aktyvni(c.risk_active), cls: s.risk, view: 'risks' },
   ]
 
   return (
@@ -457,7 +465,7 @@ function Projects({ onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon="film" color="var(--blue)" title="Проєкти" sub={roleSub('Менеджер', memberName(team, 'manager'), `${open.length} активні`)} />
+      <Header icon="film" color="var(--blue)" title="Проєкти" sub={roleSub('Менеджер', memberName(team, 'manager'), spravy(open.length))} />
       <div className="section-label">Активні</div>
       {open.length === 0 && <div className="empty">Активних задач немає</div>}
       {open.map((t) => (
@@ -492,7 +500,7 @@ function Life({ onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon="home" color="var(--green)" title="Побут" sub={roleSub('Асистент', memberName(team, 'assistant'), `${open.length} справи`)} />
+      <Header icon="home" color="var(--green)" title="Побут" sub={roleSub('Асистент', memberName(team, 'assistant'), spravy(open.length))} />
       <div className="section-label">На сьогодні</div>
       {open.length === 0 && <div className="empty"><span className="ico-text">{Icons.check(16)} Все зроблено</span></div>}
       {open.map((t) => (
@@ -527,7 +535,7 @@ function Risks({ onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon="alert" color="var(--red)" title="Тривоги" sub={`${active.length} активні`} />
+      <Header icon="alert" color="var(--red)" title="Тривоги" sub={aktyvni(active.length)} />
       <div className="stat-grid">
         <div className="stat"><div className="num" style={{ color: 'var(--red)' }}>{active.length}</div><div className="lbl">активні</div></div>
         <div className="stat"><div className="num">{risks.length}</div><div className="lbl">за тиждень</div></div>
