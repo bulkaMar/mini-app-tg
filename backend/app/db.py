@@ -18,6 +18,8 @@ _ADD_COLUMNS = [
     ("messages", "target_role", "VARCHAR(20)"),
     ("expenses", "approved_at", "TIMESTAMP"),
     ("tasks", "done_at", "TIMESTAMP"),
+    ("tasks", "updated_at", "TIMESTAMP"),
+    ("expenses", "updated_at", "TIMESTAMP"),
 ]
 
 

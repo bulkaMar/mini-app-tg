@@ -52,6 +52,10 @@ class Task(Base):
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # коли виконано
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # автоматично оновлюється при будь-якій правці → SSE бачить зміну тексту/дедлайну наживо
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -85,6 +89,10 @@ class Expense(Base):
     comment: Mapped[str] = mapped_column(Text, default="")  # напр. «наступного разу купи дешевше»
     owner_role: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # автоматично оновлюється при будь-якій правці → SSE бачить зміну суми/коментаря наживо
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

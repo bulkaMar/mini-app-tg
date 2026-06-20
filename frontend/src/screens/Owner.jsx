@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
@@ -292,6 +292,7 @@ function Finance({ onBack }) {
     get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
+  useLiveSel(m?.expenses, sel, setSel) // відкрита витрата оновлюється наживо
 
   const addExpense = async () => {
     if (!text.trim() || !amount) return
@@ -463,6 +464,7 @@ function Projects({ onBack }) {
     get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита задача оновлюється наживо
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   return (
@@ -497,6 +499,7 @@ function Life({ onBack }) {
     get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита задача оновлюється наживо
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -531,6 +534,7 @@ function Logistics({ onBack }) {
     get('/api/team').then(setTeam).catch(() => {})
   }, [])
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита поїздка оновлюється наживо
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')

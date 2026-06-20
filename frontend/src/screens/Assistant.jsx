@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -37,6 +37,7 @@ function Life({ me, category }) {
     [category],
   )
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита справа оновлюється наживо
 
   const add = async () => {
     if (!text.trim()) return
@@ -105,6 +106,7 @@ function Money() {
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
   usePoll(load)
+  useLiveSel(m?.expenses, sel, setSel) // відкрита витрата оновлюється наживо
 
   const add = async () => {
     try {

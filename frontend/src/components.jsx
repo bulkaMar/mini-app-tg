@@ -327,6 +327,17 @@ export function usePoll(fn, ms = 30000) {
   }, [ms])
 }
 
+/* ---------- тримає відкрите вікно в актуальному стані ----------
+   коли список перезавантажився (хтось інший відредагував запис), підставляємо свіжий
+   запис із тим самим id — зміни видно одразу, без перевідкриття. Зник запис → вікно закриється. */
+export function useLiveSel(list, sel, setSel) {
+  useEffect(() => {
+    if (!sel) return
+    const fresh = (list || []).find((x) => x.id === sel.id) || null
+    if (fresh !== sel) setSel(fresh)
+  }, [list, sel, setSel])
+}
+
 /* ---------- блокування фону: поки відкрите центральне вікно, сторінка не гортається ---------- */
 function useLockScroll() {
   useEffect(() => {
@@ -598,6 +609,13 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
+  const edited = useRef(false) // користувач сам почав правити → не перетираємо його ввід
+  // підхоплюємо зовнішні зміни (інший учасник відредагував) наживо, поки сам не редагую
+  useEffect(() => {
+    if (edited.current) return
+    setComment(e.comment || '')
+    setAmount(e.amount ? String(Math.round(e.amount)) : '')
+  }, [e.comment, e.amount])
   const amountValid = Number(amount) > 0
   const changed = comment.trim() !== (e.comment || '') || (amountValid && Number(amount) !== e.amount)
 
@@ -620,8 +638,8 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
         {e.approved ? Icons.check(13) : Icons.clock(13)}
         {e.approved ? 'підтверджено' : 'чекає підтвердження'} · {fmtTime(e.approved && e.approved_at ? e.approved_at : e.time)}
       </div>
-      <MoneyInput value={amount} onChange={setAmount} placeholder="Сума" invalid={!amountValid} />
-      <textarea rows={3} value={comment} onChange={(ev) => setComment(ev.target.value)}
+      <MoneyInput value={amount} onChange={(v) => { edited.current = true; setAmount(v) }} placeholder="Сума" invalid={!amountValid} />
+      <textarea rows={3} value={comment} onChange={(ev) => { edited.current = true; setComment(ev.target.value) }}
         placeholder="Коментар (напр.: наступного разу купи дешевше)" />
       <button className="btn-primary" style={{ background: color, opacity: changed && amountValid ? 1 : 0.45 }}
         onClick={() => save()} disabled={busy || !changed || !amountValid}>
@@ -656,6 +674,13 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
+  const edited = useRef(false) // користувач сам почав правити → не перетираємо його ввід
+  // підхоплюємо зовнішні зміни (інший учасник відредагував) наживо, поки сам не редагую
+  useEffect(() => {
+    if (edited.current) return
+    setText(t.text)
+    setDue(t.due || '')
+  }, [t.text, t.due])
   const changed = text.trim() !== t.text || (due || '') !== (t.due || '')
 
   const save = async (extra = {}) => {
@@ -673,12 +698,12 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
         {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
         {t.status === 'done' ? `виконано${t.done_at ? ' · ' + fmtTime(t.done_at) : ''}` : 'в роботі'} · {CAT_LABEL[t.category] || ''}
       </div>
-      <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
+      <textarea rows={3} value={text} onChange={(e) => { edited.current = true; setText(e.target.value) }}
         placeholder="Текст задачі" />
       {t.status !== 'done' ? (
         <>
           <label className="transcript-hint">Дедлайн (необов'язково)</label>
-          <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+          <input type="date" value={due} onChange={(e) => { edited.current = true; setDue(e.target.value) }} />
         </>
       ) : (t.due && (
         <div className="preview-meta ico-text">

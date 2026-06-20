@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, Entry, Header, Icons, NotificationBell, TabBar, TaskSheet, directionLabel, fmtTime, usePoll, useToast } from '../components'
+import { CenterModal, Entry, Header, Icons, NotificationBell, TabBar, TaskSheet, directionLabel, fmtTime, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -110,6 +110,7 @@ function Tasks() {
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([])), [])
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита задача оновлюється наживо
 
   const add = async () => {
     if (!text.trim()) return

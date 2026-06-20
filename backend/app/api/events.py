@@ -48,6 +48,8 @@ async def _fingerprint(session) -> str:
         await scalar(select(func.count()).select_from(Task)),
         await scalar(select(func.count()).select_from(Task).where(Task.status == "done")),
         await scalar(select(func.count()).select_from(Task).where(Task.deleted_at.is_not(None))),
+        await scalar(select(func.max(Task.updated_at))),  # ловить правки тексту/дедлайну задачі
+        await scalar(select(func.max(Expense.updated_at))),  # ловить правки суми/коментаря витрати
         await scalar(select(func.max(Risk.id))),
         await scalar(select(func.count()).select_from(Risk).where(Risk.resolved.is_(True))),
         await scalar(select(func.count()).select_from(Risk).where(Risk.deleted_at.is_not(None))),

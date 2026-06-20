@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, fmtTime, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
@@ -95,6 +95,7 @@ function Trips() {
   const [adding, setAdding] = useState(false)
   const load = useCallback(() => get('/api/tasks?category=logistics').then(setTasks).catch(() => setTasks([])), [])
   usePoll(load)
+  useLiveSel(tasks, sel, setSel) // відкрита поїздка оновлюється наживо
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   return (
@@ -131,6 +132,7 @@ function Money() {
   const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
   usePoll(load)
+  useLiveSel(m?.expenses, sel, setSel) // відкрита витрата оновлюється наживо
 
   const add = async () => {
     try {
