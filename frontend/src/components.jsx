@@ -675,12 +675,16 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
       </div>
       <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
         placeholder="Текст задачі" />
-      {t.status !== 'done' && (
+      {t.status !== 'done' ? (
         <>
           <label className="transcript-hint">Дедлайн (необов'язково)</label>
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </>
-      )}
+      ) : (t.due && (
+        <div className="preview-meta ico-text">
+          {Icons.clock(13)} Дедлайн був: {t.due.slice(8, 10)}.{t.due.slice(5, 7)}.{t.due.slice(0, 4)}
+        </div>
+      ))}
       <button className="btn-primary" style={{ background: color, opacity: changed && text.trim() ? 1 : 0.45 }}
         disabled={busy || !changed || !text.trim()} onClick={() => save()}>
         {busy ? 'Зберігаю…' : 'Зберегти зміни'}
