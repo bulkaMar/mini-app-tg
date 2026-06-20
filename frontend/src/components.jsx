@@ -423,9 +423,6 @@ export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved 
             </div>
           ))}
         </div>
-        {plan?.transcript && (
-          <div className="transcript-hint">Почув: «{plan.transcript}»</div>
-        )}
         <button className="btn-primary" style={{ background: color }} onClick={save} disabled={busy || !valid.length}>
           {Icons.check(18)} {busy ? 'Зберігаю…' : `Роздати${valid.length > 1 ? ` (${valid.length})` : ''}`}
         </button>
