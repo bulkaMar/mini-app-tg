@@ -15,6 +15,7 @@ const plural = (n, one, few, many) => {
 }
 const spravy = (n) => `${n} ${plural(n, 'справа', 'справи', 'справ')}`
 const aktyvni = (n) => `${n} ${plural(n, 'активна', 'активні', 'активних')}`
+const poyizdky = (n) => `${n} ${plural(n, 'поїздка', 'поїздки', 'поїздок')}`
 const MEMBER_ROLES = [
   { value: 'manager', label: 'Менеджер' },
   { value: 'assistant', label: 'Асистент' },
@@ -48,6 +49,7 @@ export default function Owner({ me }) {
   const screen =
     view === 'production' ? drill(<Projects onBack={back} />) :
     view === 'life' ? drill(<Life onBack={back} />) :
+    view === 'logistics' ? drill(<Logistics onBack={back} />) :
     view === 'risks' ? drill(<Risks onBack={back} />) :
     view === 'money' ? drill(<Finance onBack={back} />) :
     tab === 'home' ? <Home openView={setView} /> :
@@ -92,6 +94,7 @@ function Home({ openView }) {
   const rows = [
     { key: 'production', icon: 'film', title: 'Проєкти', value: spravy(c.production_open), cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
     { key: 'life', icon: 'home', title: 'Побут', value: spravy(c.life_open), cls: s.life, view: 'life' },
+    { key: 'logistics', icon: 'pin', title: 'Поїздки', value: poyizdky(c.logistics_open), cls: s.logistics, view: 'logistics' },
     { key: 'risk', icon: 'alert', title: 'Тривоги', value: aktyvni(c.risk_active), cls: s.risk, view: 'risks' },
   ]
 
@@ -512,6 +515,40 @@ function Life({ onBack }) {
       ))}
       {sel && (
         <TaskSheet t={sel} color="var(--green)" onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
+    </div>
+  )
+}
+
+/* ---------- дрілдаун: Поїздки (логістика водія) ---------- */
+function Logistics({ onBack }) {
+  const [tasks, setTasks] = useState(null)
+  const [team, setTeam] = useState([])
+  const [sel, setSel] = useState(null)
+  const load = useCallback(() => {
+    get('/api/tasks?category=logistics').then(setTasks).catch(() => setTasks([]))
+    get('/api/team').then(setTeam).catch(() => {})
+  }, [])
+  usePoll(load)
+  if (!tasks) return <div className="loading">Завантаження…</div>
+  const open = tasks.filter((t) => t.status === 'open')
+  const done = tasks.filter((t) => t.status === 'done')
+  return (
+    <div className="screen">
+      <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
+      <Header icon="pin" color="var(--gold)" title="Поїздки" sub={roleSub('Водій', memberName(team, 'driver'), poyizdky(open.length))} />
+      <div className="section-label">Активні</div>
+      {open.length === 0 && <div className="empty">Поїздок немає</div>}
+      {open.map((t) => (
+        <TaskItem key={t.id} t={t} icon="pin" onOpen={() => setSel(t)} />
+      ))}
+      {done.length > 0 && <div className="section-label">Виконані</div>}
+      {done.slice(0, 5).map((t) => (
+        <TaskItem key={t.id} t={t} icon="pin" onOpen={() => setSel(t)} />
+      ))}
+      {sel && (
+        <TaskSheet t={sel} color="var(--gold)" onClose={() => setSel(null)}
           onChanged={() => { setSel(null); load() }} />
       )}
     </div>

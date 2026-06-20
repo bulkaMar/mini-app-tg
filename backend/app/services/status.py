@@ -62,10 +62,12 @@ async def compute_dashboard(session: AsyncSession) -> dict:
     budget_pct = round(spent / budget * 100) if budget else 0
 
     life_open = by_cat.get("life", 0) + by_cat.get("dog", 0)
+    logistics_open = by_cat.get("logistics", 0)
 
     statuses = {
         "production": "crit" if (prod_risk and has_high) else ("warn" if prod_risk or by_cat.get("production", 0) >= 8 else "ok"),
         "life": "crit" if life_open >= 5 else ("warn" if life_open >= 1 else "ok"),
+        "logistics": "crit" if logistics_open >= 5 else ("warn" if logistics_open >= 1 else "ok"),
         "money": "crit" if budget_pct > 100 else ("warn" if budget_pct >= 80 else "ok"),
         "risk": "crit" if has_high else ("warn" if risk_count else "ok"),
     }
@@ -103,6 +105,7 @@ async def compute_dashboard(session: AsyncSession) -> dict:
             "open_tasks": total_open,
             "life_open": life_open,
             "production_open": by_cat.get("production", 0),
+            "logistics_open": logistics_open,
             "risk_active": risk_count,
             "spent": round(float(spent)),
             "budget": budget,
