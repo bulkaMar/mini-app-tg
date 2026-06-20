@@ -80,7 +80,7 @@ export default function Owner({ me }) {
   )
 }
 
-/* ---------- Головна (пульт) ---------- */
+/* ---------- Головна (панель) ---------- */
 function Home({ openView }) {
   const [d, setD] = useState(null)
   const load = useCallback(() => get('/api/dashboard').then(setD).catch(() => {}), [])

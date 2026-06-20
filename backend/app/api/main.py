@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="PULT API", lifespan=lifespan)
+app = FastAPI(title="CanniBot API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

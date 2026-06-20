@@ -44,7 +44,7 @@ STATUS_EMOJI = {"ok": "🟢", "warn": "🟡", "crit": "🔴"}
 def _webapp_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📟 Відкрити ПУЛЬТ", web_app=WebAppInfo(url=settings.webapp_url))]
+            [InlineKeyboardButton(text="📟 Відкрити CanniBot", web_app=WebAppInfo(url=settings.webapp_url))]
         ]
     )
 
@@ -52,7 +52,7 @@ def _webapp_kb() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message, db_user: User) -> None:
     await message.answer(
-        f"Привіт, {db_user.name or 'друже'}! Це ПУЛЬТ.\n\n"
+        f"Привіт, {db_user.name or 'друже'}! Це CanniBot.\n\n"
         "Надиктуй голосове або напиши текстом — я розкладу по полицях "
         "(задача / тривога / витрата) і збережу.\n\n"
         f"Твоя роль: <b>{ROLE_LABELS.get(db_user.role, db_user.role)}</b>",
@@ -64,7 +64,7 @@ async def cmd_start(message: Message, db_user: User) -> None:
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     await message.answer(
-        "/start — привітання + кнопка ПУЛЬТ\n"
+        "/start — привітання + кнопка CanniBot\n"
         "/pult — відкрити Mini App\n"
         "/status — короткий статус системи\n"
         "/money — фінанси місяця\n"

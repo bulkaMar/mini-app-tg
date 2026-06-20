@@ -108,7 +108,7 @@ class BudgetItem(Base):
 
 
 class DailySnapshot(Base):
-    """Кеш статусів дня для швидкого /пульта."""
+    """Кеш статусів дня для швидкої панелі."""
 
     __tablename__ = "daily_snapshots"
 

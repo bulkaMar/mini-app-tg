@@ -26,7 +26,7 @@ async def main() -> None:
 
     await bot.set_my_commands(
         [
-            BotCommand(command="start", description="Привітання + кнопка ПУЛЬТ"),
+            BotCommand(command="start", description="Привітання + кнопка CanniBot"),
             BotCommand(command="pult", description="Відкрити Mini App"),
             BotCommand(command="status", description="Короткий статус системи"),
             BotCommand(command="money", description="Фінанси"),

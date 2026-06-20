@@ -1,8 +1,8 @@
-# ПУЛЬТ
+# CanniBot
 
 Telegram Mini App + бот для продакшн-команди. Учасники (менеджер, асистент, водій)
 диктують або пишуть — AI (Claude) прибирає воду, класифікує запис
-(задача / тривога / витрата / статус) і кладе в БД. Власник відкриває пульт
+(задача / тривога / витрата / статус) і кладе в БД. Власник відкриває панель
 і за 3 секунди бачить стан усіх напрямків.
 
 ## Структура
@@ -12,7 +12,7 @@ backend/            Python: aiogram 3 бот + FastAPI + SQLAlchemy
   app/
     bot/            бот: whitelist, текст/голос → класифікація → підтвердження
     api/            REST для Mini App: initData auth, ролі, ендпоінти
-    services/       saver, transcribe (Whisper), status (пульт), notify (пуш owner)
+    services/       saver, transcribe (Whisper), status (панель), notify (пуш owner)
     classifier.py   Шар 1 regex (слова-тривоги) + Шар 2 Claude + fallback
     models.py       users, messages, tasks, risks, expenses, daily_snapshots
 frontend/           Mini App: Vite + React, екрани під роль
@@ -76,7 +76,7 @@ npm run dev                 # http://localhost:5173
 - ✅ Слова-тривоги (зрив, терміново, горить…) → миттєвий пуш owner
 - ✅ Graceful degradation: без Claude/Whisper працює regex-fallback, бот не падає
 - ✅ Mini App: initData-валідація, роутинг за роллю, диктування з кожного екрана
-- ✅ Пульт owner: 4 статуси 🟢🟡🔴 + Темп + стрічка «Надійшло»
+- ✅ Панель owner: 4 статуси 🟢🟡🔴 + Темп + стрічка «Надійшло»
 - ✅ Команда: список, інвайт за @username, ролі
 - ✅ Approve витрат кнопкою
 
