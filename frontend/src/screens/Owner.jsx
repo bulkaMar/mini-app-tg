@@ -8,9 +8,9 @@ const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИ
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
 const STATUS_TEXT = { ok: 'в нормі', warn: 'потребує уваги', crit: 'критично' }
 const MEMBER_ROLES = [
-  { value: 'manager', label: 'Менеджер — проєкти' },
-  { value: 'assistant', label: 'Асистент — побут і пес' },
-  { value: 'driver', label: 'Водій — логістика' },
+  { value: 'manager', label: 'Менеджер' },
+  { value: 'assistant', label: 'Асистент' },
+  { value: 'driver', label: 'Водій' },
 ]
 
 // ім'я активного учасника певної ролі (перше слово) + підпис у шапці сторінки
@@ -244,9 +244,9 @@ function MemberSheet({ m, onClose, onChanged }) {
       <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
       <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
       <select value={role} onChange={(e) => setRole(e.target.value)}>
-        <option value="manager">Менеджер — проєкти</option>
-        <option value="assistant">Асистент — побут і пес</option>
-        <option value="driver">Водій — логістика</option>
+        <option value="manager">Менеджер</option>
+        <option value="assistant">Асистент</option>
+        <option value="driver">Водій</option>
       </select>
       <button className="btn-primary" style={{ background: 'var(--orange)', opacity: changed ? 1 : 0.45 }}
         disabled={busy || !changed} onClick={() => save()}>
