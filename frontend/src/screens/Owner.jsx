@@ -614,7 +614,7 @@ function TaskItem({ t, icon, onOpen }) {
       <span className="ico">{Icons[icon]?.(19)}</span>
       <span className="grow">{t.text}</span>
       <span className={`tag ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`}>
-        {t.status === 'done' ? 'готово' : overdue ? 'терміново' : t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}
+        {t.status === 'done' ? (t.done_at ? fmtTime(t.done_at) : 'готово') : overdue ? 'терміново' : t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}
       </span>
       <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
     </button>

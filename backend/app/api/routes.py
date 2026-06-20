@@ -139,6 +139,7 @@ async def list_tasks(
             "status": t.status,
             "owner_role": t.owner_role,
             "due": t.due.isoformat() if t.due else None,
+            "done_at": t.done_at.isoformat() if t.done_at else None,
             "time": t.created_at.isoformat() if t.created_at else None,
         }
         for t in rows
@@ -183,6 +184,7 @@ async def update_task(
         task.due = parse_due(body["due"])
     if body.get("status") in ("open", "done"):
         task.status = body["status"]
+        task.done_at = datetime.now(timezone.utc) if body["status"] == "done" else None
     if body.get("deleted"):
         task.deleted_at = datetime.now(timezone.utc)
     await session.commit()

@@ -671,7 +671,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
     <CenterModal title="Задача" onClose={onClose}>
       <div className="preview-meta ico-text">
         {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
-        {t.status === 'done' ? 'виконано' : 'в роботі'} · {CAT_LABEL[t.category] || ''}
+        {t.status === 'done' ? `виконано${t.done_at ? ' · ' + fmtTime(t.done_at) : ''}` : 'в роботі'} · {CAT_LABEL[t.category] || ''}
       </div>
       <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
         placeholder="Текст задачі" />

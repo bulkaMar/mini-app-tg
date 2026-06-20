@@ -50,6 +50,7 @@ class Task(Base):
     status: Mapped[str] = mapped_column(String(10), default="open")  # open|done
     owner_role: Mapped[str] = mapped_column(String(20))
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # коли виконано
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

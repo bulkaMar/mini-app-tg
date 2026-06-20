@@ -30,8 +30,8 @@ export const MOCK = {
     { id: 2, category: 'dog', text: 'Ветеринар — дивно їсть', status: 'open', owner_role: 'assistant', due: '2026-06-11', time: '2026-06-10T09:12:00' },
     { id: 3, category: 'production', text: 'Зйомка X — 3/5 сцен', status: 'open', owner_role: 'manager', due: null, time: '2026-06-10T09:24:00' },
     { id: 4, category: 'production', text: 'Реклама Y — дедлайн чт', status: 'open', owner_role: 'manager', due: '2026-06-12', time: '2026-06-09T15:00:00' },
-    { id: 5, category: 'logistics', text: 'Забрати оператора → локація', status: 'done', owner_role: 'driver', due: null, time: '2026-06-10T08:00:00' },
-    { id: 6, category: 'life', text: 'Продукти', status: 'done', owner_role: 'assistant', due: null, time: '2026-06-10T09:05:00' },
+    { id: 5, category: 'logistics', text: 'Забрати оператора → локація', status: 'done', owner_role: 'driver', due: null, done_at: '2026-06-10T10:30:00', time: '2026-06-10T08:00:00' },
+    { id: 6, category: 'life', text: 'Продукти', status: 'done', owner_role: 'assistant', due: null, done_at: '2026-06-10T11:05:00', time: '2026-06-10T09:05:00' },
   ],
   '/api/risks': [
     { id: 1, text: 'Локація на чт не підтверджена', level: 'high', resolved: false, keyword_hit: true, owner_role: 'manager', time: '2026-06-10T09:32:00' },

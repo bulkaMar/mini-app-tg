@@ -17,6 +17,7 @@ SessionMaker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 _ADD_COLUMNS = [
     ("messages", "target_role", "VARCHAR(20)"),
     ("expenses", "approved_at", "TIMESTAMP"),
+    ("tasks", "done_at", "TIMESTAMP"),
 ]
 
 
