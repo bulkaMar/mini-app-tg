@@ -682,7 +682,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
         </>
       ) : (t.due && (
         <div className="preview-meta ico-text">
-          {Icons.clock(13)} Дедлайн був: {t.due.slice(8, 10)}.{t.due.slice(5, 7)}.{t.due.slice(0, 4)}
+          {Icons.clock(13)} Дедлайн: {t.due.slice(8, 10)}.{t.due.slice(5, 7)}.{t.due.slice(0, 4)}
         </div>
       ))}
       <button className="btn-primary" style={{ background: color, opacity: changed && text.trim() ? 1 : 0.45 }}
