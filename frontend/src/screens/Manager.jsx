@@ -122,6 +122,7 @@ function Tasks() {
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
+  const done = tasks.filter((t) => t.status === 'done')
   return (
     <div className="screen">
       <Header icon="task" color="var(--blue)" title="Задачі" sub={`${open.length} відкриті`} />
@@ -138,6 +139,16 @@ function Tasks() {
       <button className="btn-dashed" style={{ color: 'var(--blue)' }} onClick={() => setAdding(true)}>
         {Icons.plus(18)} Додати задачу
       </button>
+      {done.length > 0 && <div className="section-label">Виконано</div>}
+      {done.slice(0, 10).map((t) => (
+        <button key={t.id} className="item done" onClick={() => setSel(t)}>
+          <span className="dot ok" />
+          <span className="ico">{Icons.film(19)}</span>
+          <span className="grow">{t.text}</span>
+          <span className="tag ok">{t.done_at ? fmtTime(t.done_at) : 'готово'}</span>
+          <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
+        </button>
+      ))}
       {adding && (
         <CenterModal title="Нова задача" onClose={() => setAdding(false)}>
           <input placeholder="Напр.: підтвердити локацію на чт" value={text}
