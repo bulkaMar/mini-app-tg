@@ -20,22 +20,26 @@ from .saver import resolve_target_role
 ROLE_LABELS = {"owner": "власник", "manager": "менеджер", "assistant": "асистент", "driver": "водій"}
 
 
-async def monthly_budget(session: AsyncSession) -> float:
-    """Сума секцій бюджету; якщо секцій немає — MONTHLY_BUDGET з .env."""
+async def monthly_budget(session: AsyncSession, workspace_id: int | None) -> float:
+    """Сума секцій бюджету простору; якщо секцій немає — MONTHLY_BUDGET з .env."""
     total = (
-        await session.execute(select(func.coalesce(func.sum(BudgetItem.amount), 0.0)))
+        await session.execute(
+            select(func.coalesce(func.sum(BudgetItem.amount), 0.0)).where(
+                BudgetItem.workspace_id == workspace_id
+            )
+        )
     ).scalar_one()
     return float(total) or settings.monthly_budget
 
 
-async def compute_dashboard(session: AsyncSession) -> dict:
+async def compute_dashboard(session: AsyncSession, workspace_id: int | None) -> dict:
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     open_tasks = (
         await session.execute(
             select(Task.category, func.count())
-            .where(Task.status == "open", Task.deleted_at.is_(None))
+            .where(Task.status == "open", Task.deleted_at.is_(None), Task.workspace_id == workspace_id)
             .group_by(Task.category)
         )
     ).all()
@@ -44,7 +48,9 @@ async def compute_dashboard(session: AsyncSession) -> dict:
 
     active_risks = (
         await session.execute(
-            select(Risk).where(Risk.resolved.is_(False), Risk.deleted_at.is_(None))
+            select(Risk).where(
+                Risk.resolved.is_(False), Risk.deleted_at.is_(None), Risk.workspace_id == workspace_id
+            )
         )
     ).scalars().all()
     risk_count = len(active_risks)
@@ -54,11 +60,13 @@ async def compute_dashboard(session: AsyncSession) -> dict:
     spent = (
         await session.execute(
             select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
-                Expense.deleted_at.is_(None), Expense.created_at >= month_start
+                Expense.deleted_at.is_(None),
+                Expense.created_at >= month_start,
+                Expense.workspace_id == workspace_id,
             )
         )
     ).scalar_one()
-    budget = await monthly_budget(session)
+    budget = await monthly_budget(session, workspace_id)
     budget_pct = round(spent / budget * 100) if budget else 0
 
     life_open = by_cat.get("life", 0) + by_cat.get("dog", 0)
@@ -80,6 +88,7 @@ async def compute_dashboard(session: AsyncSession) -> dict:
         await session.execute(
             select(Message, User.name)
             .join(User, User.telegram_id == Message.telegram_id, isouter=True)
+            .where(Message.workspace_id == workspace_id)
             .order_by(Message.created_at.desc())
             .limit(20)
         )

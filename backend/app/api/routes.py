@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..classifier import Classification, classify, plan_tasks
 from ..config import settings
-from ..models import BudgetItem, Expense, Message, Risk, Task, User
+from ..models import BudgetItem, Expense, Message, Risk, Task, User, Workspace
 from ..services.notify import route_notifications
 from ..services.saver import parse_due, resolve_target_role, save_classified, save_owner_task
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
@@ -21,19 +21,37 @@ from .events import subscribe, unsubscribe
 router = APIRouter(prefix="/api")
 
 
-@router.get("/events")
-async def events(request: Request, auth: str | None = Query(default=None)):
-    """SSE-стрім: пушить подію `change`, коли в БД щось змінилось.
-    EventSource не вміє слати кастомні заголовки → initData приходить у query."""
-    if auth:
-        try:
-            validate_init_data(auth)
-        except InitDataError:
-            raise HTTPException(status_code=401, detail="invalid initData")
-    elif not settings.dev_auth:
+async def _events_workspace_id(auth: str | None) -> int | None:
+    """Визначає workspace для SSE-підписки за initData (або дев-простір)."""
+    from ..db import SessionMaker
+
+    async with SessionMaker() as session:
+        if auth:
+            try:
+                data = validate_init_data(auth)
+            except InitDataError:
+                raise HTTPException(status_code=401, detail="invalid initData")
+            tg_id = (data.get("user") or {}).get("id")
+            user = (
+                await session.execute(select(User).where(User.telegram_id == tg_id))
+            ).scalar_one_or_none() if tg_id else None
+            return user.workspace_id if user else None
+        if settings.dev_auth:
+            ws = (
+                await session.execute(
+                    select(Workspace).where(Workspace.owner_telegram_id == settings.primary_owner_id)
+                )
+            ).scalar_one_or_none()
+            return ws.id if ws else None
         raise HTTPException(status_code=401, detail="initData required")
 
-    queue = subscribe()
+
+@router.get("/events")
+async def events(request: Request, auth: str | None = Query(default=None)):
+    """SSE-стрім: пушить подію `change`, коли в просторі користувача щось змінилось.
+    EventSource не вміє слати кастомні заголовки → initData приходить у query."""
+    ws_id = await _events_workspace_id(auth)
+    queue = subscribe(ws_id)
 
     async def gen():
         try:
@@ -78,7 +96,7 @@ async def me(user: User = Depends(get_current_user)) -> dict:
 async def dashboard(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> dict:
-    return await compute_dashboard(session)
+    return await compute_dashboard(session, user.workspace_id)
 
 
 @router.get("/feed")
@@ -86,7 +104,12 @@ async def feed(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
     """Стрічка повідомлень: owner — усі, інші — тільки свої категорії."""
-    q = select(Message).order_by(Message.created_at.desc()).limit(30)
+    q = (
+        select(Message)
+        .where(Message.workspace_id == user.workspace_id)
+        .order_by(Message.created_at.desc())
+        .limit(30)
+    )
     if user.role != "owner":
         q = q.where(Message.category.in_(allowed_categories(user)))
     rows = (await session.execute(q)).scalars().all()
@@ -126,7 +149,7 @@ async def list_tasks(
         cats = {category}
     q = (
         select(Task)
-        .where(Task.deleted_at.is_(None), Task.category.in_(cats))
+        .where(Task.workspace_id == user.workspace_id, Task.deleted_at.is_(None), Task.category.in_(cats))
         .order_by(Task.status.asc(), Task.created_at.desc())
         .limit(100)
     )
@@ -155,6 +178,7 @@ async def create_task(
     if body.category not in allowed_categories(user):
         raise HTTPException(status_code=403, detail="category not allowed for your role")
     task = Task(
+        workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
         category=body.category,
         text=body.text,
@@ -173,7 +197,11 @@ async def update_task(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    task = (await session.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+    task = (
+        await session.execute(
+            select(Task).where(Task.id == task_id, Task.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if task is None or task.deleted_at is not None:
         raise HTTPException(status_code=404)
     if user.role != "owner" and task.category not in allowed_categories(user):
@@ -199,7 +227,10 @@ async def list_risks(
 ) -> list[dict]:
     rows = (
         await session.execute(
-            select(Risk).where(Risk.deleted_at.is_(None)).order_by(Risk.resolved.asc(), Risk.created_at.desc()).limit(50)
+            select(Risk)
+            .where(Risk.workspace_id == user.workspace_id, Risk.deleted_at.is_(None))
+            .order_by(Risk.resolved.asc(), Risk.created_at.desc())
+            .limit(50)
         )
     ).scalars().all()
     if user.role not in ("owner", "manager"):
@@ -226,7 +257,11 @@ async def resolve_risk(
 ) -> dict:
     if user.role not in ("owner", "manager"):
         raise HTTPException(status_code=403)
-    risk = (await session.execute(select(Risk).where(Risk.id == risk_id))).scalar_one_or_none()
+    risk = (
+        await session.execute(
+            select(Risk).where(Risk.id == risk_id, Risk.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if risk is None:
         raise HTTPException(status_code=404)
     risk.resolved = True
@@ -248,7 +283,12 @@ async def money(
 ) -> dict:
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    q = select(Expense).where(Expense.deleted_at.is_(None)).order_by(Expense.created_at.desc()).limit(50)
+    q = (
+        select(Expense)
+        .where(Expense.workspace_id == user.workspace_id, Expense.deleted_at.is_(None))
+        .order_by(Expense.created_at.desc())
+        .limit(50)
+    )
     if user.role != "owner" and not (user.permissions or {}).get("see_budget"):
         q = q.where(Expense.telegram_id == user.telegram_id)
     rows = (await session.execute(q)).scalars().all()
@@ -256,11 +296,13 @@ async def money(
     spent = (
         await session.execute(
             select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
-                Expense.deleted_at.is_(None), Expense.created_at >= month_start
+                Expense.workspace_id == user.workspace_id,
+                Expense.deleted_at.is_(None),
+                Expense.created_at >= month_start,
             )
         )
     ).scalar_one()
-    budget = await monthly_budget(session)
+    budget = await monthly_budget(session, user.workspace_id)
     budget_pct = round(spent / budget * 100) if budget else 0
 
     return {
@@ -293,6 +335,7 @@ async def create_expense(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     e = Expense(
+        workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
         text=body.text,
         amount=body.amount,
@@ -312,7 +355,11 @@ async def update_expense(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Коментар до витрати (хто підтверджує або автор) і зміна approved (передумав — зняв OK)."""
-    e = (await session.execute(select(Expense).where(Expense.id == expense_id))).scalar_one_or_none()
+    e = (
+        await session.execute(
+            select(Expense).where(Expense.id == expense_id, Expense.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if e is None or e.deleted_at is not None:
         raise HTTPException(status_code=404)
     can_approve = user.role == "owner" or bool((user.permissions or {}).get("approve_expenses"))
@@ -352,7 +399,11 @@ async def approve_expense(
 ) -> dict:
     if user.role != "owner" and not (user.permissions or {}).get("approve_expenses"):
         raise HTTPException(status_code=403)
-    e = (await session.execute(select(Expense).where(Expense.id == expense_id))).scalar_one_or_none()
+    e = (
+        await session.execute(
+            select(Expense).where(Expense.id == expense_id, Expense.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if e is None:
         raise HTTPException(status_code=404)
     e.approved = True
@@ -377,9 +428,15 @@ class BudgetIn(BaseModel):
 async def get_budget(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> dict:
-    rows = (await session.execute(select(BudgetItem).order_by(BudgetItem.id.asc()))).scalars().all()
+    rows = (
+        await session.execute(
+            select(BudgetItem)
+            .where(BudgetItem.workspace_id == user.workspace_id)
+            .order_by(BudgetItem.id.asc())
+        )
+    ).scalars().all()
     return {
-        "budget": await monthly_budget(session),
+        "budget": await monthly_budget(session, user.workspace_id),
         "items": [{"id": b.id, "name": b.name, "amount": b.amount} for b in rows],
     }
 
@@ -390,13 +447,13 @@ async def set_budget(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Повністю замінює секції бюджету. Порожній список → бюджет з .env."""
-    await session.execute(delete(BudgetItem))
+    """Повністю замінює секції бюджету простору. Порожній список → бюджет з .env."""
+    await session.execute(delete(BudgetItem).where(BudgetItem.workspace_id == user.workspace_id))
     for it in body.items:
         if it.name.strip() and it.amount > 0:
-            session.add(BudgetItem(name=it.name.strip(), amount=it.amount))
+            session.add(BudgetItem(workspace_id=user.workspace_id, name=it.name.strip(), amount=it.amount))
     await session.commit()
-    return {"ok": True, "budget": await monthly_budget(session)}
+    return {"ok": True, "budget": await monthly_budget(session, user.workspace_id)}
 
 
 # ---------- team (owner) ----------
@@ -411,7 +468,11 @@ class MemberIn(BaseModel):
 async def team(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
-    rows = (await session.execute(select(User).order_by(User.created_at.asc()))).scalars().all()
+    rows = (
+        await session.execute(
+            select(User).where(User.workspace_id == user.workspace_id).order_by(User.created_at.asc())
+        )
+    ).scalars().all()
     return [
         {
             "id": u.id,
@@ -435,7 +496,10 @@ async def invite_member(
     if body.role not in ("manager", "assistant", "driver"):
         raise HTTPException(status_code=400, detail="bad role")
     username = body.username.lstrip("@")
-    member = User(username=username, name=body.name or username, role=body.role, status="invited")
+    member = User(
+        workspace_id=user.workspace_id,  # запрошений приєднується до простору власника
+        username=username, name=body.name or username, role=body.role, status="invited",
+    )
     session.add(member)
     await session.commit()
     return {"id": member.id, "ok": True}
@@ -448,7 +512,11 @@ async def update_member(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    member = (await session.execute(select(User).where(User.id == member_id))).scalar_one_or_none()
+    member = (
+        await session.execute(
+            select(User).where(User.id == member_id, User.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if member is None:
         raise HTTPException(status_code=404)
     if member.role == "owner" and (body.get("role") or body.get("deleted")):

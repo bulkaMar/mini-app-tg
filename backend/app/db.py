@@ -1,10 +1,20 @@
 import logging
 
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from .config import settings
-from .models import Base
+from .models import (
+    Base,
+    BudgetItem,
+    DailySnapshot,
+    Expense,
+    Message,
+    Risk,
+    Task,
+    User,
+    Workspace,
+)
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +30,18 @@ _ADD_COLUMNS = [
     ("tasks", "done_at", "TIMESTAMP"),
     ("tasks", "updated_at", "TIMESTAMP"),
     ("expenses", "updated_at", "TIMESTAMP"),
+    # workspaces (мультитенантність): кожна таблиця даних отримує workspace_id
+    ("users", "workspace_id", "INTEGER"),
+    ("messages", "workspace_id", "INTEGER"),
+    ("tasks", "workspace_id", "INTEGER"),
+    ("risks", "workspace_id", "INTEGER"),
+    ("expenses", "workspace_id", "INTEGER"),
+    ("budget_items", "workspace_id", "INTEGER"),
+    ("daily_snapshots", "workspace_id", "INTEGER"),
 ]
+
+# таблиці, рядки яких треба прив'язати до workspace при міграції наявної БД
+_WS_MODELS = [User, Message, Task, Risk, Expense, BudgetItem, DailySnapshot]
 
 
 def _column_missing(sync_conn, table: str, column: str) -> bool:
@@ -28,6 +49,34 @@ def _column_missing(sync_conn, table: str, column: str) -> bool:
     if table not in insp.get_table_names():
         return False
     return column not in {c["name"] for c in insp.get_columns(table)}
+
+
+async def _backfill_workspaces() -> None:
+    """Наявні дані без workspace → у «легасі» простір першого власника (із env)."""
+    async with SessionMaker() as session:
+        orphan = 0
+        for model in _WS_MODELS:
+            orphan += (
+                await session.execute(
+                    select(func.count()).select_from(model).where(model.workspace_id.is_(None))
+                )
+            ).scalar() or 0
+        if not orphan:
+            return
+        primary = settings.primary_owner_id
+        ws = (
+            await session.execute(select(Workspace).where(Workspace.owner_telegram_id == primary))
+        ).scalar_one_or_none()
+        if ws is None:
+            ws = Workspace(owner_telegram_id=primary, name="Робочий простір")
+            session.add(ws)
+            await session.flush()
+        for model in _WS_MODELS:
+            await session.execute(
+                update(model).where(model.workspace_id.is_(None)).values(workspace_id=ws.id)
+            )
+        await session.commit()
+        logging.warning("DB migrate → backfilled %s orphan rows into workspace %s", orphan, ws.id)
 
 
 async def init_db() -> None:
@@ -49,4 +98,5 @@ async def init_db() -> None:
         except Exception:
             logging.warning("DB migrate skip %s.%s (вже існує?)", table, column)
 
-    logging.warning("DB tables ensured (create_all done)")
+    await _backfill_workspaces()
+    logging.warning("DB tables ensured (create_all + workspace migration done)")
