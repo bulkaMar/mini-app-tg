@@ -8,10 +8,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class Workspace(Base):
+    """Ізольований простір одного власника: своя команда й дані."""
+
+    __tablename__ = "workspaces"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), default="Робочий простір")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(120), default="")
     username: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -27,6 +39,7 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     sender_role: Mapped[str] = mapped_column(String(20))
     raw_text: Mapped[str] = mapped_column(Text)
@@ -44,6 +57,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     category: Mapped[str] = mapped_column(String(20))  # production|life|dog|logistics
     text: Mapped[str] = mapped_column(Text)
@@ -69,6 +83,7 @@ class TaskItem(Base):
     __tablename__ = "task_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     task_id: Mapped[int] = mapped_column(Integer, index=True)
     kind: Mapped[str] = mapped_column(String(10), default="subtask")  # subtask|check
     text: Mapped[str] = mapped_column(Text)
@@ -81,6 +96,7 @@ class Risk(Base):
     __tablename__ = "risks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     text: Mapped[str] = mapped_column(Text)
     level: Mapped[str] = mapped_column(String(10), default="med")  # low|med|high
@@ -96,6 +112,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     category: Mapped[str] = mapped_column(String(20), default="finance")
     text: Mapped[str] = mapped_column(Text, default="")
@@ -121,7 +138,8 @@ class TaskCategory(Base):
     __tablename__ = "task_categories"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    key: Mapped[str] = mapped_column(String(20), index=True)
     label: Mapped[str] = mapped_column(String(60))
     icon: Mapped[str] = mapped_column(String(30), default="task")
     color: Mapped[str] = mapped_column(String(20), default="orange")
@@ -139,7 +157,8 @@ class TaskPriority(Base):
     __tablename__ = "task_priorities"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    key: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    key: Mapped[str] = mapped_column(String(10), index=True)
     label: Mapped[str] = mapped_column(String(60))
     icon: Mapped[str | None] = mapped_column(String(30), nullable=True)
     color: Mapped[str] = mapped_column(String(20), default="muted")
@@ -155,6 +174,7 @@ class BudgetItem(Base):
     __tablename__ = "budget_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(120))
     amount: Mapped[float] = mapped_column(Float, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -166,7 +186,8 @@ class DailySnapshot(Base):
     __tablename__ = "daily_snapshots"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
     production_status: Mapped[str] = mapped_column(String(10), default="ok")  # ok|warn|crit
     life_status: Mapped[str] = mapped_column(String(10), default="ok")
     budget_status: Mapped[str] = mapped_column(String(10), default="ok")

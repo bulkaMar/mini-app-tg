@@ -87,7 +87,7 @@ async def cmd_status(message: Message, db_user: User) -> None:
         await message.answer("Статус системи бачить тільки власник.")
         return
     async with SessionMaker() as session:
-        d = await compute_dashboard(session)
+        d = await compute_dashboard(session, db_user.workspace_id)
     s, c = d["statuses"], d["counts"]
     await message.answer(
         f"{STATUS_EMOJI[s['production']]} Проєкти — відкритих задач: {c['production_open']}\n"
@@ -100,11 +100,15 @@ async def cmd_status(message: Message, db_user: User) -> None:
 
 @router.message(Command("risks"))
 @router.message(F.text.func(lambda t: t and t.strip().lower().startswith("/тривоги")))
-async def cmd_risks(message: Message) -> None:
+async def cmd_risks(message: Message, db_user: User) -> None:
     async with SessionMaker() as session:
         risks = (
             await session.execute(
-                select(Risk).where(Risk.resolved.is_(False), Risk.deleted_at.is_(None)).order_by(Risk.created_at.desc())
+                select(Risk).where(
+                    Risk.workspace_id == db_user.workspace_id,
+                    Risk.resolved.is_(False),
+                    Risk.deleted_at.is_(None),
+                ).order_by(Risk.created_at.desc())
             )
         ).scalars().all()
     if not risks:
@@ -116,16 +120,22 @@ async def cmd_risks(message: Message) -> None:
 
 @router.message(Command("money"))
 @router.message(F.text.func(lambda t: t and t.strip().lower().startswith("/фінанси")))
-async def cmd_money(message: Message) -> None:
+async def cmd_money(message: Message, db_user: User) -> None:
     async with SessionMaker() as session:
         total = (
             await session.execute(
-                select(func.coalesce(func.sum(Expense.amount), 0.0)).where(Expense.deleted_at.is_(None))
+                select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
+                    Expense.workspace_id == db_user.workspace_id, Expense.deleted_at.is_(None)
+                )
             )
         ).scalar_one()
         pending = (
             await session.execute(
-                select(Expense).where(Expense.approved.is_(False), Expense.deleted_at.is_(None)).limit(10)
+                select(Expense).where(
+                    Expense.workspace_id == db_user.workspace_id,
+                    Expense.approved.is_(False),
+                    Expense.deleted_at.is_(None),
+                ).limit(10)
             )
         ).scalars().all()
     lines = [f"Витрачено всього: <b>{round(total)} ₴</b>"]

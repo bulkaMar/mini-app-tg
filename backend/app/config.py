@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./pult.db"
 
     owner_telegram_id: int = 0
+    # кілька власників → кожен зі своїм ізольованим workspace. Приймає список
+    # OWNER_TELEGRAM_IDS (через кому або JSON); owner_telegram_id лишається для сумісності
+    owner_telegram_ids: Annotated[list[int], NoDecode] = []
     # NoDecode: не даємо pydantic JSON-парсити env — розбираємо самі (нижче)
     allowed_user_ids: Annotated[list[int], NoDecode] = []
 
@@ -39,7 +42,15 @@ class Settings(BaseSettings):
             return v.replace("postgres://", "postgresql+asyncpg://", 1)
         return v
 
-    @field_validator("allowed_user_ids", "cors_origins", mode="before")
+    @field_validator("owner_telegram_id", mode="before")
+    @classmethod
+    def _blank_to_zero(cls, v):
+        """Порожній OWNER_TELEGRAM_ID в env не валимо — трактуємо як 0 (не задано)."""
+        if isinstance(v, str) and not v.strip():
+            return 0
+        return v
+
+    @field_validator("allowed_user_ids", "owner_telegram_ids", "cors_origins", mode="before")
     @classmethod
     def _split_list(cls, v):
         """Приймає і JSON-список ["a","b"], і простий рядок через кому a, b."""
@@ -53,6 +64,25 @@ class Settings(BaseSettings):
         if s.startswith("["):
             return json.loads(s)
         return [item.strip() for item in s.split(",") if item.strip()]
+
+    @property
+    def owner_ids(self) -> set[int]:
+        """Усі дозволені власники: owner_telegram_id (сумісність) + owner_telegram_ids."""
+        ids = set(int(x) for x in self.owner_telegram_ids if x)
+        if self.owner_telegram_id:
+            ids.add(int(self.owner_telegram_id))
+        return ids
+
+    @property
+    def primary_owner_id(self) -> int:
+        """Детермінований «основний» власник: для легасі-бекфілу, дев-простору, allowed."""
+        if self.owner_telegram_id:
+            return int(self.owner_telegram_id)
+        ids = self.owner_ids
+        return min(ids) if ids else 0
+
+    def is_owner(self, tg_id: int | None) -> bool:
+        return tg_id is not None and int(tg_id) in self.owner_ids
 
 
 @lru_cache

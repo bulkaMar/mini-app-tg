@@ -45,6 +45,7 @@ async def save_classified(
 ) -> dict:
     """Пише сирий лог у messages і запис у відповідну таблицю. Повертає підсумок."""
     msg = Message(
+        workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
         sender_role=user.role,
         raw_text=raw_text,
@@ -59,6 +60,7 @@ async def save_classified(
     record_id = None
     if c.type == "risk":
         risk = Risk(
+            workspace_id=user.workspace_id,
             telegram_id=user.telegram_id,
             text=c.text,
             level=c.risk_level or "med",
@@ -70,6 +72,7 @@ async def save_classified(
         record_id = risk.id
     elif c.type == "money":
         expense = Expense(
+            workspace_id=user.workspace_id,
             telegram_id=user.telegram_id,
             category="finance",
             text=c.text,
@@ -82,6 +85,7 @@ async def save_classified(
         record_id = expense.id
     elif c.type == "task":
         task = Task(
+            workspace_id=user.workspace_id,
             telegram_id=user.telegram_id,
             category=c.category if c.category != "finance" else "life",
             text=c.text,
@@ -131,6 +135,7 @@ async def save_owner_task(
 
     session.add(
         Message(
+            workspace_id=owner.workspace_id,
             telegram_id=owner.telegram_id,
             sender_role=owner.role,
             raw_text=text,
@@ -141,6 +146,7 @@ async def save_owner_task(
         )
     )
     task = Task(
+        workspace_id=owner.workspace_id,
         telegram_id=owner.telegram_id,
         category=category,
         text=text,

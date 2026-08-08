@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import SessionMaker
 from ..models import User
+from ..services.workspace import get_or_create_workspace
 from .auth import InitDataError, validate_init_data
 
 # фейкові telegram_id для дев-користувачів (owner мапиться на справжнього)
@@ -20,12 +21,14 @@ DEV_USERS = {
 
 
 async def _get_dev_user(session, role: str) -> "User":
+    primary = settings.primary_owner_id
+    ws = await get_or_create_workspace(session, primary)  # усі дев-ролі в одному просторі
     if role == "owner":
         user = (
-            await session.execute(select(User).where(User.telegram_id == settings.owner_telegram_id))
+            await session.execute(select(User).where(User.telegram_id == primary))
         ).scalar_one_or_none()
         if user is None:
-            user = User(telegram_id=settings.owner_telegram_id, name="Owner (dev)", role="owner")
+            user = User(workspace_id=ws.id, telegram_id=primary, name="Owner (dev)", role="owner")
             session.add(user)
             await session.commit()
         return user
@@ -34,7 +37,7 @@ async def _get_dev_user(session, role: str) -> "User":
     tg_id, name = DEV_USERS[role]
     user = (await session.execute(select(User).where(User.telegram_id == tg_id))).scalar_one_or_none()
     if user is None:
-        user = User(telegram_id=tg_id, name=name, role=role)
+        user = User(workspace_id=ws.id, telegram_id=tg_id, name=name, role=role)
         session.add(user)
         await session.commit()
     return user
@@ -52,13 +55,22 @@ async def _provision_user(session, tg_id: int, tg_user: dict) -> "User | None":
         or ""
     )
 
-    if tg_id == settings.owner_telegram_id or tg_id in settings.allowed_user_ids:
+    if settings.is_owner(tg_id):  # власник → свій ізольований простір
+        ws = await get_or_create_workspace(session, tg_id)
         user = User(
-            telegram_id=tg_id,
-            name=full_name,
-            username=username,
-            role="owner" if tg_id == settings.owner_telegram_id else "assistant",
-            status="active",
+            workspace_id=ws.id, telegram_id=tg_id, name=full_name,
+            username=username, role="owner", status="active",
+        )
+        session.add(user)
+        await session.commit()
+        return user
+
+    if tg_id in settings.allowed_user_ids:  # допущені — у простір першого власника
+        primary = settings.primary_owner_id
+        ws = await get_or_create_workspace(session, primary)
+        user = User(
+            workspace_id=ws.id, telegram_id=tg_id, name=full_name,
+            username=username, role="assistant", status="active",
         )
         session.add(user)
         await session.commit()
@@ -67,10 +79,10 @@ async def _provision_user(session, tg_id: int, tg_user: dict) -> "User | None":
     if username:  # запрошений власником член команди — активуємо за username
         invited = (
             await session.execute(
-                select(User).where(User.username == username, User.status == "invited")
+                select(User).where(User.username == username, User.status == "invited").limit(1)
             )
-        ).scalar_one_or_none()
-        if invited is not None:
+        ).scalars().first()
+        if invited is not None:  # workspace_id успадковується з інвайту
             invited.telegram_id = tg_id
             invited.name = full_name
             invited.status = "active"

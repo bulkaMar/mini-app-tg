@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..classifier import classify, plan_tasks
 from ..config import settings
 from ..models import (
-    BudgetItem, Expense, Message, Risk, Task, TaskCategory, TaskItem, TaskPriority, User,
+    BudgetItem, Expense, Message, Risk, Task, TaskCategory, TaskItem, TaskPriority,
+    User, Workspace,
 )
 from ..services.dictionaries import (
     all_categories,
@@ -45,7 +46,7 @@ ITEM_KINDS = ("subtask", "check")
 MAX_ITEMS = 50  # запобіжник, щоб одна задача не роздулась нескінченним списком
 
 
-async def _replace_items(session: AsyncSession, task_id: int, items) -> None:
+async def _replace_items(session: AsyncSession, task_id: int, ws_id: int | None, items) -> None:
     """Повністю замінює пункти задачі присланим списком (порядок = порядок у списку)."""
     await session.execute(delete(TaskItem).where(TaskItem.task_id == task_id))
     pos = 0
@@ -56,17 +57,22 @@ async def _replace_items(session: AsyncSession, task_id: int, items) -> None:
         text = str(text).strip()
         if kind not in ITEM_KINDS or not text:
             continue
-        session.add(TaskItem(task_id=task_id, kind=kind, text=text, done=done, position=pos))
+        session.add(TaskItem(
+            workspace_id=ws_id, task_id=task_id, kind=kind,
+            text=text, done=done, position=pos,
+        ))
         pos += 1
 
 
-async def _items_by_task(session: AsyncSession, task_ids: list[int]) -> dict[int, list[dict]]:
+async def _items_by_task(
+    session: AsyncSession, task_ids: list[int], ws_id: int | None
+) -> dict[int, list[dict]]:
     """Пункти для пачки задач одним запитом — щоб не смикати БД на кожен рядок."""
     if not task_ids:
         return {}
     rows = (await session.execute(
         select(TaskItem)
-        .where(TaskItem.task_id.in_(task_ids))
+        .where(TaskItem.task_id.in_(task_ids), TaskItem.workspace_id == ws_id)
         .order_by(TaskItem.position.asc(), TaskItem.id.asc())
     )).scalars().all()
     out: dict[int, list[dict]] = {}
@@ -79,25 +85,43 @@ async def _items_by_task(session: AsyncSession, task_ids: list[int]) -> dict[int
 
 async def _check_task_category(session: AsyncSession, user: User, key: str) -> None:
     """Немає такого розділу — це помилка запиту; є, але закритий ролі — заборона."""
-    if key not in {c.key for c in await all_categories(session)}:
+    if key not in {c.key for c in await all_categories(session, user.workspace_id)}:
         raise HTTPException(status_code=400, detail="Такого розділу немає")
     if key not in await usable_categories(session, user):
         raise HTTPException(status_code=403, detail="category not allowed for your role")
 
 
-@router.get("/events")
-async def events(request: Request, auth: str | None = Query(default=None)):
-    """SSE-стрім: пушить подію `change`, коли в БД щось змінилось.
-    EventSource не вміє слати кастомні заголовки → initData приходить у query."""
-    if auth:
-        try:
-            validate_init_data(auth)
-        except InitDataError:
-            raise HTTPException(status_code=401, detail="invalid initData")
-    elif not settings.dev_auth:
+async def _events_workspace_id(auth: str | None) -> int | None:
+    """Визначає workspace для SSE-підписки за initData (або дев-простір)."""
+    from ..db import SessionMaker
+
+    async with SessionMaker() as session:
+        if auth:
+            try:
+                data = validate_init_data(auth)
+            except InitDataError:
+                raise HTTPException(status_code=401, detail="invalid initData")
+            tg_id = (data.get("user") or {}).get("id")
+            user = (
+                await session.execute(select(User).where(User.telegram_id == tg_id))
+            ).scalar_one_or_none() if tg_id else None
+            return user.workspace_id if user else None
+        if settings.dev_auth:
+            ws = (
+                await session.execute(
+                    select(Workspace).where(Workspace.owner_telegram_id == settings.primary_owner_id)
+                )
+            ).scalar_one_or_none()
+            return ws.id if ws else None
         raise HTTPException(status_code=401, detail="initData required")
 
-    queue = subscribe()
+
+@router.get("/events")
+async def events(request: Request, auth: str | None = Query(default=None)):
+    """SSE-стрім: пушить подію `change`, коли в просторі користувача щось змінилось.
+    EventSource не вміє слати кастомні заголовки → initData приходить у query."""
+    ws_id = await _events_workspace_id(auth)
+    queue = subscribe(ws_id)
 
     async def gen():
         try:
@@ -146,7 +170,7 @@ async def me(
 async def dashboard(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> dict:
-    return await compute_dashboard(session)
+    return await compute_dashboard(session, user.workspace_id)
 
 
 @router.get("/feed")
@@ -154,7 +178,12 @@ async def feed(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
     """Стрічка повідомлень: owner — усі, інші — тільки свої категорії."""
-    q = select(Message).order_by(Message.created_at.desc()).limit(30)
+    q = (
+        select(Message)
+        .where(Message.workspace_id == user.workspace_id)
+        .order_by(Message.created_at.desc())
+        .limit(30)
+    )
     if user.role != "owner":
         # базові теми ролі (зокрема finance) + розділи задач, які їй видно
         cats = allowed_categories(user) | await visible_categories(session, user)
@@ -201,8 +230,10 @@ async def dictionaries(
     visible = await visible_categories(session, user)
     usable = set(await usable_categories(session, user))
     return {
-        "categories": [_cat_out(c, usable) for c in await all_categories(session) if c.key in visible],
-        "priorities": [_prio_out(p) for p in await all_priorities(session)],
+        "categories": [
+            _cat_out(c, usable) for c in await all_categories(session, user.workspace_id) if c.key in visible
+        ],
+        "priorities": [_prio_out(p) for p in await all_priorities(session, user.workspace_id)],
     }
 
 
@@ -222,11 +253,12 @@ async def create_category(
     label = body.label.strip()
     if not label:
         raise HTTPException(status_code=400, detail="Назва розділу не може бути порожньою")
-    rows = await all_categories(session)
+    rows = await all_categories(session, user.workspace_id)
     if any(c.label.lower() == label.lower() for c in rows):
         raise HTTPException(status_code=409, detail="Розділ із такою назвою вже є")
     cat = TaskCategory(
-        key=await new_key(session, "c", TaskCategory),
+        workspace_id=user.workspace_id,
+        key=await new_key(session, "c", TaskCategory, user.workspace_id),
         label=label,
         icon=body.icon or "task",
         color=body.color if body.color in COLORS else "orange",
@@ -247,7 +279,9 @@ async def update_category(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Перейменувати / змінити вигляд і те, хто бачить. Системний розділ — теж можна."""
-    cat = (await session.execute(select(TaskCategory).where(TaskCategory.id == cat_id))).scalar_one_or_none()
+    cat = (await session.execute(select(TaskCategory).where(
+        TaskCategory.id == cat_id, TaskCategory.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404)
     if isinstance(body.get("label"), str) and body["label"].strip():
@@ -270,7 +304,9 @@ async def delete_category(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Видаляє свій розділ. Якщо в ньому є справи — просимо вказати, куди їх перенести."""
-    cat = (await session.execute(select(TaskCategory).where(TaskCategory.id == cat_id))).scalar_one_or_none()
+    cat = (await session.execute(select(TaskCategory).where(
+        TaskCategory.id == cat_id, TaskCategory.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
     if cat is None:
         raise HTTPException(status_code=404)
     if cat.is_system:
@@ -283,7 +319,7 @@ async def delete_category(
         select(func.count()).select_from(Task).where(Task.category == cat.key, Task.deleted_at.is_(None))
     )).scalar_one()
     if count:
-        others = [c.key for c in await all_categories(session) if c.key != cat.key]
+        others = [c.key for c in await all_categories(session, user.workspace_id) if c.key != cat.key]
         if move_to not in others:
             raise HTTPException(
                 status_code=409,
@@ -313,11 +349,12 @@ async def create_priority(
     label = body.label.strip()
     if not label:
         raise HTTPException(status_code=400, detail="Назва рівня не може бути порожньою")
-    rows = await all_priorities(session)
+    rows = await all_priorities(session, user.workspace_id)
     if any(p.label.lower() == label.lower() for p in rows):
         raise HTTPException(status_code=409, detail="Рівень із такою назвою вже є")
     prio = TaskPriority(
-        key=await new_key(session, "p", TaskPriority),
+        workspace_id=user.workspace_id,
+        key=await new_key(session, "p", TaskPriority, user.workspace_id),
         label=label,
         icon=(body.icon or None),
         color=body.color if body.color in COLORS else "muted",
@@ -337,7 +374,9 @@ async def update_priority(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    prio = (await session.execute(select(TaskPriority).where(TaskPriority.id == prio_id))).scalar_one_or_none()
+    prio = (await session.execute(select(TaskPriority).where(
+        TaskPriority.id == prio_id, TaskPriority.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
     if prio is None:
         raise HTTPException(status_code=404)
     if isinstance(body.get("label"), str) and body["label"].strip():
@@ -362,7 +401,7 @@ async def reorder_priorities(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Порядок згори вниз: перший — найважливіший."""
-    rows = {p.id: p for p in await all_priorities(session)}
+    rows = {p.id: p for p in await all_priorities(session, user.workspace_id)}
     for i, pid in enumerate(body.ids):
         if pid in rows:
             rows[pid].rank = i * 10
@@ -377,7 +416,9 @@ async def delete_priority(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Задачі з цим рівнем стають звичайними — нічого не губиться."""
-    prio = (await session.execute(select(TaskPriority).where(TaskPriority.id == prio_id))).scalar_one_or_none()
+    prio = (await session.execute(select(TaskPriority).where(
+        TaskPriority.id == prio_id, TaskPriority.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
     if prio is None:
         raise HTTPException(status_code=404)
     if prio.is_default:
@@ -385,7 +426,7 @@ async def delete_priority(
             status_code=409,
             detail="Це рівень за замовчуванням — на нього падають задачі з видалених рівнів",
         )
-    fallback = await default_priority_key(session)
+    fallback = await default_priority_key(session, user.workspace_id)
     await session.execute(
         update(Task).where(Task.priority == prio.key).values(priority=fallback)
     )
@@ -427,8 +468,12 @@ async def list_tasks(
     # порядок важливості беремо з довідника (rank); рівень міг зникнути → у кінець
     q = (
         select(Task)
-        .outerjoin(TaskPriority, TaskPriority.key == Task.priority)
-        .where(Task.deleted_at.is_(None), where)
+        .outerjoin(
+            TaskPriority,
+            (TaskPriority.key == Task.priority)
+            & (TaskPriority.workspace_id == user.workspace_id),
+        )
+        .where(Task.workspace_id == user.workspace_id, Task.deleted_at.is_(None), where)
         .order_by(
             Task.status.asc(),
             func.coalesce(TaskPriority.rank, 1000),
@@ -437,7 +482,7 @@ async def list_tasks(
         .limit(100)
     )
     rows = (await session.execute(q)).scalars().all()
-    items = await _items_by_task(session, [t.id for t in rows])
+    items = await _items_by_task(session, [t.id for t in rows], user.workspace_id)
     out = []
     for t in rows:
         its = items.get(t.id, [])
@@ -465,19 +510,20 @@ async def create_task(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     await _check_task_category(session, user, body.category)
-    prios = await priority_keys(session)
+    prios = await priority_keys(session, user.workspace_id)
     task = Task(
+        workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
         category=body.category,
         text=body.text,
         owner_role=user.role,
-        priority=body.priority if body.priority in prios else await default_priority_key(session),
+        priority=body.priority if body.priority in prios else await default_priority_key(session, user.workspace_id),
         due=parse_due(body.due),
     )
     session.add(task)
     await session.flush()  # потрібен id, щоб прив'язати підзадачі/чекліст
     if body.items:
-        await _replace_items(session, task.id, body.items)
+        await _replace_items(session, task.id, user.workspace_id, body.items)
     await session.commit()
     return {"id": task.id, "ok": True}
 
@@ -489,7 +535,11 @@ async def update_task(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    task = (await session.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
+    task = (
+        await session.execute(
+            select(Task).where(Task.id == task_id, Task.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if task is None or task.deleted_at is not None:
         raise HTTPException(status_code=404)
     # правити може той, кому відкритий розділ, або той, кому задачу доручено
@@ -502,10 +552,10 @@ async def update_task(
     if body.get("category") and body["category"] != task.category:
         await _check_task_category(session, user, body["category"])
         task.category = body["category"]
-    if body.get("priority") in await priority_keys(session):
+    if body.get("priority") in await priority_keys(session, user.workspace_id):
         task.priority = body["priority"]
     if isinstance(body.get("items"), list):
-        await _replace_items(session, task.id, body["items"])
+        await _replace_items(session, task.id, user.workspace_id, body["items"])
         task.updated_at = datetime.now(timezone.utc)  # щоб живі оновлення побачили зміну
     if body.get("status") in ("open", "done"):
         task.status = body["status"]
@@ -524,7 +574,10 @@ async def list_risks(
 ) -> list[dict]:
     rows = (
         await session.execute(
-            select(Risk).where(Risk.deleted_at.is_(None)).order_by(Risk.resolved.asc(), Risk.created_at.desc()).limit(50)
+            select(Risk)
+            .where(Risk.workspace_id == user.workspace_id, Risk.deleted_at.is_(None))
+            .order_by(Risk.resolved.asc(), Risk.created_at.desc())
+            .limit(50)
         )
     ).scalars().all()
     if user.role not in ("owner", "manager"):
@@ -551,7 +604,11 @@ async def resolve_risk(
 ) -> dict:
     if user.role not in ("owner", "manager"):
         raise HTTPException(status_code=403)
-    risk = (await session.execute(select(Risk).where(Risk.id == risk_id))).scalar_one_or_none()
+    risk = (
+        await session.execute(
+            select(Risk).where(Risk.id == risk_id, Risk.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if risk is None:
         raise HTTPException(status_code=404)
     risk.resolved = True
@@ -573,7 +630,12 @@ async def money(
 ) -> dict:
     now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    q = select(Expense).where(Expense.deleted_at.is_(None)).order_by(Expense.created_at.desc()).limit(50)
+    q = (
+        select(Expense)
+        .where(Expense.workspace_id == user.workspace_id, Expense.deleted_at.is_(None))
+        .order_by(Expense.created_at.desc())
+        .limit(50)
+    )
     if user.role != "owner" and not (user.permissions or {}).get("see_budget"):
         q = q.where(Expense.telegram_id == user.telegram_id)
     rows = (await session.execute(q)).scalars().all()
@@ -581,11 +643,13 @@ async def money(
     spent = (
         await session.execute(
             select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
-                Expense.deleted_at.is_(None), Expense.created_at >= month_start
+                Expense.workspace_id == user.workspace_id,
+                Expense.deleted_at.is_(None),
+                Expense.created_at >= month_start,
             )
         )
     ).scalar_one()
-    budget = await monthly_budget(session)
+    budget = await monthly_budget(session, user.workspace_id)
     budget_pct = round(spent / budget * 100) if budget else 0
 
     return {
@@ -618,6 +682,7 @@ async def create_expense(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     e = Expense(
+        workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
         text=body.text,
         amount=body.amount,
@@ -637,7 +702,11 @@ async def update_expense(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Коментар до витрати (хто підтверджує або автор) і зміна approved (передумав — зняв OK)."""
-    e = (await session.execute(select(Expense).where(Expense.id == expense_id))).scalar_one_or_none()
+    e = (
+        await session.execute(
+            select(Expense).where(Expense.id == expense_id, Expense.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if e is None or e.deleted_at is not None:
         raise HTTPException(status_code=404)
     can_approve = user.role == "owner" or bool((user.permissions or {}).get("approve_expenses"))
@@ -677,7 +746,11 @@ async def approve_expense(
 ) -> dict:
     if user.role != "owner" and not (user.permissions or {}).get("approve_expenses"):
         raise HTTPException(status_code=403)
-    e = (await session.execute(select(Expense).where(Expense.id == expense_id))).scalar_one_or_none()
+    e = (
+        await session.execute(
+            select(Expense).where(Expense.id == expense_id, Expense.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if e is None:
         raise HTTPException(status_code=404)
     e.approved = True
@@ -702,9 +775,15 @@ class BudgetIn(BaseModel):
 async def get_budget(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> dict:
-    rows = (await session.execute(select(BudgetItem).order_by(BudgetItem.id.asc()))).scalars().all()
+    rows = (
+        await session.execute(
+            select(BudgetItem)
+            .where(BudgetItem.workspace_id == user.workspace_id)
+            .order_by(BudgetItem.id.asc())
+        )
+    ).scalars().all()
     return {
-        "budget": await monthly_budget(session),
+        "budget": await monthly_budget(session, user.workspace_id),
         "items": [{"id": b.id, "name": b.name, "amount": b.amount} for b in rows],
     }
 
@@ -715,13 +794,13 @@ async def set_budget(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Повністю замінює секції бюджету. Порожній список → бюджет з .env."""
-    await session.execute(delete(BudgetItem))
+    """Повністю замінює секції бюджету простору. Порожній список → бюджет з .env."""
+    await session.execute(delete(BudgetItem).where(BudgetItem.workspace_id == user.workspace_id))
     for it in body.items:
         if it.name.strip() and it.amount > 0:
-            session.add(BudgetItem(name=it.name.strip(), amount=it.amount))
+            session.add(BudgetItem(workspace_id=user.workspace_id, name=it.name.strip(), amount=it.amount))
     await session.commit()
-    return {"ok": True, "budget": await monthly_budget(session)}
+    return {"ok": True, "budget": await monthly_budget(session, user.workspace_id)}
 
 
 # ---------- team (owner) ----------
@@ -736,7 +815,11 @@ class MemberIn(BaseModel):
 async def team(
     user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
-    rows = (await session.execute(select(User).order_by(User.created_at.asc()))).scalars().all()
+    rows = (
+        await session.execute(
+            select(User).where(User.workspace_id == user.workspace_id).order_by(User.created_at.asc())
+        )
+    ).scalars().all()
     return [
         {
             "id": u.id,
@@ -760,7 +843,10 @@ async def invite_member(
     if body.role not in ("manager", "assistant", "driver"):
         raise HTTPException(status_code=400, detail="bad role")
     username = body.username.lstrip("@")
-    member = User(username=username, name=body.name or username, role=body.role, status="invited")
+    member = User(
+        workspace_id=user.workspace_id,  # запрошений приєднується до простору власника
+        username=username, name=body.name or username, role=body.role, status="invited",
+    )
     session.add(member)
     await session.commit()
     return {"id": member.id, "ok": True}
@@ -773,7 +859,11 @@ async def update_member(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    member = (await session.execute(select(User).where(User.id == member_id))).scalar_one_or_none()
+    member = (
+        await session.execute(
+            select(User).where(User.id == member_id, User.workspace_id == user.workspace_id)
+        )
+    ).scalar_one_or_none()
     if member is None:
         raise HTTPException(status_code=404)
     if member.role == "owner" and (body.get("role") or body.get("deleted")):
@@ -892,10 +982,12 @@ def _plan_payload(transcript: str, tasks) -> dict:
     }
 
 
-async def _plan_options(session: AsyncSession) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+async def _plan_options(
+    session: AsyncSession, ws_id: int | None
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
     """Актуальні розділи й рівні важливості — щоб AI розкладав по тому, що є зараз."""
-    cats = [(c.key, c.label) for c in await all_categories(session)]
-    prios = [(p.key, p.label) for p in await all_priorities(session)]
+    cats = [(c.key, c.label) for c in await all_categories(session, ws_id)]
+    prios = [(p.key, p.label) for p in await all_priorities(session, ws_id)]
     return cats, prios
 
 
@@ -906,7 +998,7 @@ async def ingest_plan(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Текст → список задач із підказкою виконавця (без збереження)."""
-    cats, prios = await _plan_options(session)
+    cats, prios = await _plan_options(session, user.workspace_id)
     tasks = await plan_tasks(body.text, cats, prios)
     return _plan_payload(body.text, tasks)
 
@@ -924,7 +1016,7 @@ async def ingest_voice_plan(
     text = await transcribe(audio, filename=file.filename or "voice.webm")
     if not text:
         raise HTTPException(status_code=422, detail="Не вдалося розшифрувати голос — спробуй ще раз")
-    cats, prios = await _plan_options(session)
+    cats, prios = await _plan_options(session, user.workspace_id)
     tasks = await plan_tasks(text, cats, prios)
     return _plan_payload(text, tasks)
 
@@ -937,8 +1029,8 @@ async def ingest_tasks(
 ) -> dict:
     """Зберігає роздані задачі пачкою + штовхає пуш кожному виконавцю (крім «я»)."""
     valid_cats = set(await usable_categories(session, user))
-    valid_prios = await priority_keys(session)
-    fallback_prio = await default_priority_key(session)
+    valid_prios = await priority_keys(session, user.workspace_id)
+    fallback_prio = await default_priority_key(session, user.workspace_id)
 
     saved = []
     for t in body.tasks:
