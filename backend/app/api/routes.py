@@ -108,7 +108,7 @@ async def _visible_role_keys(session: AsyncSession, user: User) -> set[str]:
 async def _check_task_category(session: AsyncSession, user: User, key: str) -> None:
     """Немає такого розділу — це помилка запиту; є, але закритий ролі — заборона."""
     if key not in {c.key for c in await all_categories(session, user.workspace_id)}:
-        raise HTTPException(status_code=400, detail="Такого розділу немає")
+        raise HTTPException(status_code=400, detail="Такої категорії немає")
     if key not in await usable_categories(session, user):
         raise HTTPException(status_code=403, detail="category not allowed for your role")
 
@@ -277,10 +277,10 @@ async def create_category(
 ) -> dict:
     label = body.label.strip()
     if not label:
-        raise HTTPException(status_code=400, detail="Назва розділу не може бути порожньою")
+        raise HTTPException(status_code=400, detail="Назва категорії не може бути порожньою")
     rows = await all_categories(session, user.workspace_id)
     if any(c.label.lower() == label.lower() for c in rows):
-        raise HTTPException(status_code=409, detail="Розділ із такою назвою вже є")
+        raise HTTPException(status_code=409, detail="Категорія з такою назвою вже є")
     cat = TaskCategory(
         workspace_id=user.workspace_id,
         key=await new_key(session, "c", TaskCategory, user.workspace_id),
@@ -338,7 +338,7 @@ async def delete_category(
     if cat.is_system:
         raise HTTPException(
             status_code=409,
-            detail="Це системний розділ — на ньому побудовані екрани. Його можна перейменувати, але не видалити",
+            detail="Це системна категорія — на ній побудовані екрани. Її можна перейменувати, але не видалити",
         )
 
     count = (await session.execute(

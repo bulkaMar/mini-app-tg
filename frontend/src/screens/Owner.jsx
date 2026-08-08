@@ -6,8 +6,7 @@ import {
   directionLabel, findCat, fmtTime,
   useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
-import Dictionaries from './Dictionaries'
-import Roles from './Roles'
+import Settings from './Settings'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
@@ -99,8 +98,7 @@ export default function Owner({ me }) {
   const drill = (node) => <SwipeBack onBack={back}>{node}</SwipeBack> // свайп уліво → назад
   // будь-який інший `view` — це ключ власного розділу власниці
   const drilldown =
-    view === 'settings' ? <Dictionaries onBack={back} /> :
-    view === 'roles' ? <Roles onBack={back} /> :
+    view === 'settings' ? <Settings onBack={back} /> :
     view === 'production' ? <Projects onBack={back} /> :
     view === 'life' ? <Life onBack={back} /> :
     view === 'logistics' ? <Logistics onBack={back} /> :
@@ -190,16 +188,8 @@ function Home({ openView }) {
       <button className="nav-row" onClick={() => openView('settings')}>
         <span className="ico">{Icons.gear(20)}</span>
         <span className="grow">
-          Розділи та важливість
-          <span className="row-sub">що можна вибирати при створенні справи</span>
-        </span>
-        <span className="chev">›</span>
-      </button>
-      <button className="nav-row" onClick={() => openView('roles')}>
-        <span className="ico">{Icons.shield(20)}</span>
-        <span className="grow">
-          Ролі
-          <span className="row-sub">хто буває в команді</span>
+          Налаштування
+          <span className="row-sub">важливість, категорії, ролі</span>
         </span>
         <span className="chev">›</span>
       </button>
@@ -600,7 +590,7 @@ function BudgetSheet({ sheet, onClose, onSaved }) {
 }
 
 /* ---------- дрілдаун: власний розділ власниці ----------
-   Один екран на будь-який розділ, доданий на сторінці «Розділи та важливість». */
+   Один екран на будь-який розділ, доданий у Налаштуваннях → Категорії. */
 function CategoryTasks({ catKey, onBack }) {
   const dict = useDictionaries()
   const cat = findCat(dict, catKey)
@@ -621,7 +611,7 @@ function CategoryTasks({ catKey, onBack }) {
   return (
     <div className="screen">
       <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
-      <Header icon={cat?.icon || 'task'} color={color} title={cat?.label || 'Розділ'} sub={spravy(open.length)} />
+      <Header icon={cat?.icon || 'task'} color={color} title={cat?.label || 'Категорія'} sub={spravy(open.length)} />
       <div className="section-label">Активні</div>
       {open.length === 0 && <div className="empty">Справ немає</div>}
       {open.map((t) => (

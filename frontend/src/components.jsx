@@ -45,7 +45,7 @@ export const Icons = {
 }
 
 /* ---------- розділи задач і рівні важливості ----------
-   Живуть у БД: власниця додає/перейменовує/видаляє свої (екран «Розділи та важливість»).
+   Живуть у БД: власниця додає/перейменовує/видаляє свої (Налаштування → Категорії / Важливість).
    Тут — спільний кеш на весь застосунок: одне завантаження, усі підписники оновлюються
    разом, у т.ч. миттєво при зміні на сервері (SSE). */
 
@@ -569,6 +569,32 @@ export function Field({ label, children }) {
   )
 }
 
+/* вибір іконки та кольору — спільні для категорій, важливості й ролей */
+export function IconPicker({ value, onChange, color }) {
+  return (
+    <div className="pick-grid">
+      {PICKABLE_ICONS.map((name) => (
+        <button key={name} type="button" className={`pick-ico ${value === name ? 'on' : ''}`}
+          style={value === name ? { borderColor: color, color } : undefined}
+          aria-label={name} onClick={() => onChange(name)}>
+          {Icons[name]?.(20)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export function ColorPicker({ value, onChange }) {
+  return (
+    <div className="pick-colors">
+      {COLOR_KEYS.map((c) => (
+        <button key={c} type="button" className={`pick-color ${value === c ? 'on' : ''}`}
+          style={{ background: colorVar(c) }} aria-label={c} onClick={() => onChange(c)} />
+      ))}
+    </div>
+  )
+}
+
 export function Segmented({ options, value, onChange, color = 'var(--orange)' }) {
   return (
     <div className="seg">
@@ -929,7 +955,7 @@ export function NewTaskModal({
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && save()} />
       {cats.length > 1 && (
-        <Field label="Розділ">
+        <Field label="Категорія">
           <Segmented options={cats} value={category} onChange={setCategory} color={color} />
         </Field>
       )}
@@ -1050,7 +1076,7 @@ export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved 
                   </select>
                 </label>
                 <label className="plan-opt">
-                  <span className="plan-opt-label">Розділ</span>
+                  <span className="plan-opt-label">Категорія</span>
                   <select value={r.category} onChange={(e) => setField(r.rid, 'category', e.target.value)}>
                     {cats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
@@ -1390,7 +1416,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
       <textarea rows={3} value={text} onChange={(e) => { edited.current = true; setText(e.target.value) }}
         placeholder="Текст задачі" />
       {t.status !== 'done' && catOpts.length > 1 && (
-        <Field label="Розділ">
+        <Field label="Категорія">
           <Segmented options={catOpts} value={category} color={color}
             onChange={(v) => { edited.current = true; setCategory(v) }} />
         </Field>
