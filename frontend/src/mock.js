@@ -4,12 +4,36 @@ const role = new URLSearchParams(location.search).get('role') || 'owner'
 
 const ROLE_LABELS = { owner: 'власник', manager: 'менеджер', assistant: 'асистент', driver: 'водій' }
 const NAMES = { owner: 'Ти', manager: 'Маріє', assistant: 'Олю', driver: 'Вікторе' }
+// які розділи задач доступні ролі (дзеркало ROLE_CATEGORIES на бекенді)
+const TASK_CATS = {
+  owner: ['production', 'life', 'dog', 'logistics'],
+  manager: ['production'],
+  assistant: ['life', 'dog'],
+  driver: ['logistics'],
+}
 
 export const MOCK = {
-  '/api/me': { telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role], permissions: {} },
+  '/api/me': {
+    telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role],
+    permissions: {}, task_categories: TASK_CATS[role] || [],
+  },
+  '/api/dictionaries': {
+    categories: [
+      { id: 1, key: 'production', label: 'Проєкти', icon: 'film', color: 'blue', roles: ['manager'], is_system: true, can_use: TASK_CATS[role]?.includes('production') },
+      { id: 2, key: 'life', label: 'Побут', icon: 'home', color: 'green', roles: ['assistant'], is_system: true, can_use: TASK_CATS[role]?.includes('life') },
+      { id: 3, key: 'dog', label: 'Пес', icon: 'dog', color: 'green', roles: ['assistant'], is_system: true, can_use: TASK_CATS[role]?.includes('dog') },
+      { id: 4, key: 'logistics', label: 'Поїздки', icon: 'pin', color: 'gold', roles: ['driver'], is_system: true, can_use: TASK_CATS[role]?.includes('logistics') },
+      { id: 5, key: 'c_demo01', label: 'Реклама', icon: 'pulse', color: 'orange', roles: ['manager'], is_system: false, can_use: role === 'owner' || role === 'manager' },
+    ].filter((c) => role === 'owner' || c.can_use),
+    priorities: [
+      { id: 1, key: 'urgent', label: 'Супер термінова', icon: 'flame', color: 'red', rank: 0, is_default: false, is_system: true },
+      { id: 2, key: 'high', label: 'Важлива', icon: 'up', color: 'warn', rank: 10, is_default: false, is_system: true },
+      { id: 3, key: 'normal', label: 'Звичайна', icon: null, color: 'muted', rank: 50, is_default: true, is_system: true },
+    ],
+  },
   '/api/dashboard': {
     statuses: { production: 'ok', life: 'warn', logistics: 'warn', money: 'ok', risk: 'crit' },
-    counts: { open_tasks: 6, life_open: 3, production_open: 3, logistics_open: 2, risk_active: 2, spent: 12400, budget: 17000, budget_pct: 73 },
+    counts: { open_tasks: 6, life_open: 3, production_open: 3, logistics_open: 2, risk_active: 2, spent: 12400, budget: 17000, budget_pct: 73, by_category: { production: 3, life: 2, dog: 1, logistics: 2, c_demo01: 1 } },
     load: 'MED',
     feed: [
       { id: 5, role: 'owner', role_label: 'власник', target_role: 'assistant', type: 'task', category: 'dog', text: 'Купити корм псу', time: '2026-06-10T09:50:00' },
@@ -26,12 +50,22 @@ export const MOCK = {
     { id: 3, role: 'manager', role_label: 'менеджер', target_role: 'owner', type: 'money', category: 'finance', text: 'Оренда обладнання · 4 500 ₴', time: '2026-06-10T09:40:00' },
   ],
   '/api/tasks': [
-    { id: 1, category: 'life', text: 'Хімчистка', status: 'open', owner_role: 'assistant', due: null, time: '2026-06-10T09:30:00' },
-    { id: 2, category: 'dog', text: 'Ветеринар — дивно їсть', status: 'open', owner_role: 'assistant', due: '2026-06-11', time: '2026-06-10T09:12:00' },
-    { id: 3, category: 'production', text: 'Зйомка X — 3/5 сцен', status: 'open', owner_role: 'manager', due: null, time: '2026-06-10T09:24:00' },
-    { id: 4, category: 'production', text: 'Реклама Y — дедлайн чт', status: 'open', owner_role: 'manager', due: '2026-06-12', time: '2026-06-09T15:00:00' },
-    { id: 5, category: 'logistics', text: 'Забрати оператора → локація', status: 'done', owner_role: 'driver', due: null, done_at: '2026-06-10T10:30:00', time: '2026-06-10T08:00:00' },
-    { id: 6, category: 'life', text: 'Продукти', status: 'done', owner_role: 'assistant', due: null, done_at: '2026-06-10T11:05:00', time: '2026-06-10T09:05:00' },
+    { id: 2, category: 'dog', text: 'Ветеринар — дивно їсть', status: 'open', priority: 'urgent', owner_role: 'assistant', due: '2026-06-11', time: '2026-06-10T09:12:00', items: [], items_total: 0, items_done: 0 },
+    {
+      id: 4, category: 'production', text: 'Реклама Y — дедлайн чт', status: 'open', priority: 'high',
+      owner_role: 'manager', due: '2026-06-12', time: '2026-06-09T15:00:00',
+      items: [
+        { id: 1, kind: 'subtask', text: 'Затвердити сценарій', done: true },
+        { id: 2, kind: 'subtask', text: 'Знайти локацію', done: false },
+        { id: 3, kind: 'check', text: 'Штатив', done: true },
+        { id: 4, kind: 'check', text: 'Запасні батареї', done: false },
+      ],
+      items_total: 4, items_done: 2,
+    },
+    { id: 1, category: 'life', text: 'Хімчистка', status: 'open', priority: 'normal', owner_role: 'assistant', due: null, time: '2026-06-10T09:30:00' },
+    { id: 3, category: 'production', text: 'Зйомка X — 3/5 сцен', status: 'open', priority: 'normal', owner_role: 'manager', due: null, time: '2026-06-10T09:24:00' },
+    { id: 5, category: 'logistics', text: 'Забрати оператора → локація', status: 'done', priority: 'normal', owner_role: 'driver', due: null, done_at: '2026-06-10T10:30:00', time: '2026-06-10T08:00:00' },
+    { id: 6, category: 'life', text: 'Продукти', status: 'done', priority: 'normal', owner_role: 'assistant', due: null, done_at: '2026-06-10T11:05:00', time: '2026-06-10T09:05:00' },
   ],
   '/api/risks': [
     { id: 1, text: 'Локація на чт не підтверджена', level: 'high', resolved: false, keyword_hit: true, owner_role: 'manager', time: '2026-06-10T09:32:00' },
@@ -72,9 +106,9 @@ export function mockResponse(path) {
     return {
       transcript: 'Ну треба купити корм псу, і домовитись за поїздку на завтра, і нагадати менеджеру про монтаж',
       tasks: [
-        { text: 'купити корм псу', assignee: 'assistant', category: 'dog' },
-        { text: 'домовитись за поїздку на завтра', assignee: 'driver', category: 'logistics' },
-        { text: 'нагадати про монтаж', assignee: 'manager', category: 'production' },
+        { text: 'купити корм псу', assignee: 'assistant', category: 'dog', priority: 'normal' },
+        { text: 'домовитись за поїздку на завтра', assignee: 'driver', category: 'logistics', priority: 'high' },
+        { text: 'нагадати про монтаж', assignee: 'manager', category: 'production', priority: 'normal' },
       ],
     }
   if (clean === '/api/ingest/tasks') return { count: 2 }

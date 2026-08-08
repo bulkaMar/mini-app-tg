@@ -20,6 +20,7 @@ _ADD_COLUMNS = [
     ("tasks", "done_at", "TIMESTAMP"),
     ("tasks", "updated_at", "TIMESTAMP"),
     ("expenses", "updated_at", "TIMESTAMP"),
+    ("tasks", "priority", "VARCHAR(10)"),
 ]
 
 
@@ -48,5 +49,14 @@ async def init_db() -> None:
                     logging.warning("DB migrate → %s.%s added", table, column)
         except Exception:
             logging.warning("DB migrate skip %s.%s (вже існує?)", table, column)
+
+    # системні розділи/важливості — лише якщо довідники ще порожні
+    from .services.dictionaries import seed_dictionaries
+
+    async with SessionMaker() as session:
+        try:
+            await seed_dictionaries(session)
+        except Exception:
+            logging.warning("DB seed dictionaries skipped (гонка старту?)")
 
     logging.warning("DB tables ensured (create_all done)")

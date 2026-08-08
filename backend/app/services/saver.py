@@ -17,6 +17,10 @@ def parse_due(due: str | None) -> date_type | None:
         return None
 
 
+# базові розділи задач (finance — не задача, а витрата). Це лише те, що вміє
+# називати AI-класифікатор; повний перелік розділів живе в БД — див. dictionaries.py
+BASE_TASK_CATEGORIES = ("production", "life", "dog", "logistics")
+
 # кому адресовано запис (для напрямку «хто → кому» у стрічці)
 _CATEGORY_TO_ROLE = {"production": "manager", "life": "assistant", "dog": "assistant", "logistics": "driver"}
 
@@ -94,21 +98,23 @@ async def save_classified(
 
 
 # ---------- збереження задач, які власниця роздає команді ----------
-# Виконавець (assignee) визначає і роль, і категорію — щоб людина точно побачила задачу
-# у своєму екрані (категорія = те, що дозволено цій ролі бачити).
+# Розділ (категорія) і виконавець — незалежні: «купити корм» може бути в розділі
+# «Пес», а доручене водію. Людина бачить задачу, якщо розділ їй відкритий АБО
+# задача доручена особисто їй (див. list_tasks).
 
 ASSIGNEE_TO_ROLE = {"me": "owner", "manager": "manager", "assistant": "assistant", "driver": "driver"}
 ASSIGNEE_TO_CATEGORY = {"manager": "production", "assistant": "life", "driver": "logistics"}
 
 
-def resolve_assignee_category(assignee: str, suggested: str | None) -> str:
-    """Категорія за виконавцем. Для власниці лишаємо підказану AI (вона бачить усе);
-    для асистента поважаємо «dog»; для решти — жорстко за роллю."""
-    if assignee == "me":
-        return suggested if suggested in ("production", "life", "dog", "logistics") else "life"
-    if assignee == "assistant":
-        return "dog" if suggested == "dog" else "life"
-    return ASSIGNEE_TO_CATEGORY.get(assignee, "life")
+def resolve_assignee_category(assignee: str, chosen: str | None, valid: set[str] | None = None) -> str:
+    """Розділ, обраний власницею (або підказаний AI). Не вказано — беремо за виконавцем."""
+    if chosen and (valid is None or chosen in valid):
+        return chosen
+    fallback = "life" if assignee == "me" else ASSIGNEE_TO_CATEGORY.get(assignee, "life")
+    # розділ за виконавцем міг бути видалений — тоді беремо будь-який наявний
+    if valid and fallback not in valid:
+        return sorted(valid)[0]
+    return fallback
 
 
 async def save_owner_task(
@@ -116,12 +122,12 @@ async def save_owner_task(
     owner: User,
     text: str,
     assignee: str,
-    suggested_category: str | None = None,
+    category: str,
+    priority: str,
 ) -> dict:
     """Створює задачу, роздану власницею на конкретну роль (+ лог у messages для стрічки).
-    Без commit — викликач комітить пачку разом."""
+    Розділ і важливість уже перевірені викликачем. Без commit — комітить викликач."""
     role = ASSIGNEE_TO_ROLE.get(assignee, "owner")
-    category = resolve_assignee_category(assignee, suggested_category)
 
     session.add(
         Message(
@@ -139,7 +145,14 @@ async def save_owner_task(
         category=category,
         text=text,
         owner_role=role,
+        priority=priority,
     )
     session.add(task)
     await session.flush()
-    return {"id": task.id, "assignee": assignee, "category": category, "text": text}
+    return {
+        "id": task.id,
+        "assignee": assignee,
+        "category": category,
+        "text": text,
+        "priority": priority,
+    }

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
@@ -9,7 +9,7 @@ export default function Driver({ me }) {
       <NotificationBell me={me} />
       <div className="app-scroll">
         {tab === 'shift' && <Shift me={me} />}
-        {tab === 'trips' && <Trips />}
+        {tab === 'trips' && <Trips me={me} />}
         {tab === 'money' && <Money />}
       </div>
       <TabBar
@@ -27,24 +27,13 @@ export default function Driver({ me }) {
 
 const isToday = (iso) => iso && new Date(iso).toDateString() === new Date().toDateString()
 
-function AddTripSheet({ onClose }) {
-  const [text, setText] = useState('')
-  const [toast, showToast] = useToast()
-  const add = async () => {
-    if (!text.trim()) return
-    try {
-      await post('/api/tasks', { category: 'logistics', text: text.trim() })
-      onClose(true)
-    } catch (e) { showToast(e.message, 'warn') }
-  }
+function AddTripSheet({ me, onClose }) {
   return (
-    <CenterModal title="Нова поїздка" onClose={() => onClose(false)}>
-      <input placeholder="Напр.: забрати оператора о 9:00" value={text}
-        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-      <button className="btn-primary" style={{ background: 'var(--gold)', opacity: text.trim() ? 1 : 0.45 }}
-        disabled={!text.trim()} onClick={add}>Зберегти</button>
-      {toast}
-    </CenterModal>
+    <NewTaskModal
+      defaultCategory="logistics" color="var(--gold)"
+      title="Нова поїздка" placeholder="Напр.: забрати оператора о 9:00"
+      onClose={() => onClose(false)} onSaved={() => onClose(true)}
+    />
   )
 }
 
@@ -79,17 +68,23 @@ function Shift({ me }) {
       {today.length === 0 && <div className="empty">Поїздок ще немає</div>}
       {today.map((t) => (
         <div key={t.id} className="entry gold">
-          <div className="top"><span className="label">ПОДАЧА</span><span className="time">{fmtTime(t.time)}</span></div>
+          <div className="top">
+            <span className="label">ПОДАЧА</span>
+            <span className="time">{fmtTime(t.time)}</span>
+          </div>
           <div className="text">{t.text}</div>
-          <div className="meta">{t.status === 'done' ? Icons.check(13) : Icons.clock(13)} {t.status === 'done' ? 'виконано' : 'в роботі'}</div>
+          <div className="meta">
+            {t.status === 'done' ? Icons.check(13) : Icons.clock(13)} {t.status === 'done' ? 'виконано' : 'в роботі'}
+            {t.priority !== 'normal' && <PriorityMark p={t.priority} />}
+          </div>
         </div>
       ))}
-      {adding && <AddTripSheet onClose={(saved) => { setAdding(false); if (saved) load() }} />}
+      {adding && <AddTripSheet me={me} onClose={(saved) => { setAdding(false); if (saved) load() }} />}
     </div>
   )
 }
 
-function Trips() {
+function Trips({ me }) {
   const [tasks, setTasks] = useState(null)
   const [sel, setSel] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -106,7 +101,9 @@ function Trips() {
         <button key={t.id} className={`item ${t.status === 'done' ? 'done' : ''}`} onClick={() => setSel(t)}>
           <span className={`dot ${t.status === 'done' ? 'ok' : 'warn'}`} />
           <span className="ico">{Icons.pin(19)}</span>
+          {t.status !== 'done' && <PriorityMark p={t.priority} />}
           <span className="grow">{t.text}</span>
+          <ItemsBadge t={t} />
           <span className={`tag ${t.status === 'done' ? 'ok' : 'warn'}`}>{t.status === 'done' ? 'готово' : 'в роботі'}</span>
           <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
@@ -114,10 +111,10 @@ function Trips() {
       <button className="btn-dashed" style={{ color: 'var(--gold)' }} onClick={() => setAdding(true)}>
         {Icons.plus(18)} Нова поїздка
       </button>
-      {adding && <AddTripSheet onClose={(saved) => { setAdding(false); if (saved) load() }} />}
+      {adding && <AddTripSheet me={me} onClose={(saved) => { setAdding(false); if (saved) load() }} />}
       {sel && (
-        <TaskSheet t={sel} color="var(--gold)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--gold)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
     </div>
   )

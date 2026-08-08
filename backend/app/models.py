@@ -48,7 +48,10 @@ class Task(Base):
     category: Mapped[str] = mapped_column(String(20))  # production|life|dog|logistics
     text: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(10), default="open")  # open|done
-    owner_role: Mapped[str] = mapped_column(String(20))
+    # важливість: normal (звичайна) | high (важлива) | urgent (супер термінова).
+    # На старих записах може бути NULL — читаємо як "normal".
+    priority: Mapped[str] = mapped_column(String(10), default="normal")
+    owner_role: Mapped[str] = mapped_column(String(20))  # кому доручено (роль виконавця)
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # коли виконано
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -57,6 +60,21 @@ class Task(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TaskItem(Base):
+    """Пункти всередині задачі: підзадачі (нумерований список) і чекліст (галочки).
+    Одна механіка, різний вигляд — kind вирішує, у якому списку показувати."""
+
+    __tablename__ = "task_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    task_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(10), default="subtask")  # subtask|check
+    text: Mapped[str] = mapped_column(Text)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Risk(Base):
@@ -94,6 +112,41 @@ class Expense(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TaskCategory(Base):
+    """Розділи задач. Системні (Проєкти/Побут/Пес/Поїздки) не можна видалити —
+    на них побудовані екрани; свої можна додавати й видаляти."""
+
+    __tablename__ = "task_categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(60))
+    icon: Mapped[str] = mapped_column(String(30), default="task")
+    color: Mapped[str] = mapped_column(String(20), default="orange")
+    roles: Mapped[list] = mapped_column(JSON, default=list)  # хто бачить (власник — завжди)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TaskPriority(Base):
+    """Рівні важливості. rank: менше число — важливіше (для сортування списків).
+    Рівень за замовчуванням (is_default) видалити не можна — на нього падають
+    задачі, у яких рівень прибрали."""
+
+    __tablename__ = "task_priorities"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(10), unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(60))
+    icon: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    color: Mapped[str] = mapped_column(String(20), default="muted")
+    rank: Mapped[int] = mapped_column(Integer, default=50)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class BudgetItem(Base):

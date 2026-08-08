@@ -179,6 +179,76 @@ html, body {
 .tag.crit { color: var(--red); }
 .tag.muted { color: var(--muted); }
 
+/* ---------- позначка важливості (рівень за замовчуванням — без позначки) ---------- */
+.prio { display: flex; align-items: center; flex-shrink: 0; }
+.prio-dot { width: 9px; height: 9px; border-radius: 50%; display: block; }
+
+/* ---------- підзадачі та чекліст усередині задачі ---------- */
+.ti-row { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
+.ti-tick {
+  width: 24px; height: 24px; flex-shrink: 0;
+  border: 1.5px solid var(--line); background: var(--card); border-radius: 8px;
+  color: #fff; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.ti-num { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--muted); }
+.ti-text { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 500; cursor: pointer; }
+.ti-row.done .ti-text { text-decoration: line-through; color: var(--muted); }
+
+/* тонша пунктирна кнопка — для «додати підзадачу» всередині форми */
+.btn-dashed.slim { padding: 9px; font-size: 14px; margin-top: 2px; }
+
+/* ---------- довідники: розділи та рівні важливості ---------- */
+.dict-row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 0; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.dict-row:last-child { border-bottom: none; }
+.dict-ico {
+  width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.dict-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dict-name { font-size: 15px; font-weight: 600; }
+.dict-sub { font-size: 12.5px; color: var(--muted); }
+.dict-move { display: flex; gap: 2px; flex-shrink: 0; }
+.dict-move .btn-icon:disabled { opacity: 0.25; cursor: default; }
+
+/* сітка іконок і кружечки кольорів у вікні розділу/рівня */
+.pick-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.pick-ico {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--muted); cursor: pointer; padding: 0;
+}
+.pick-ico.on { border-width: 2px; }
+.pick-colors { display: flex; flex-wrap: wrap; gap: 8px; }
+.pick-color {
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; box-shadow: inset 0 0 0 2px var(--bg);
+}
+.pick-color.on { border-color: var(--ink); }
+
+/* ---------- поле з підписом ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding-left: 2px;
+}
+
+/* ---------- вибір «одне з кількох» (розділ, важливість) ---------- */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 9px 12px; font-size: 13.5px; font-weight: 600; font-family: inherit;
+  color: var(--ink); cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, color 0.15s ease;
+}
+.seg-btn.on { color: #fff; }
+.seg-btn:active { transform: scale(0.96); }
+
 /* ---------- buttons ---------- */
 .btn-primary {
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -486,30 +556,33 @@ html, body {
 }
 .plan-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .plan-head h2 { font-size: 18px; }
-.plan-cols {
-  display: flex; gap: 8px;
-  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
-  padding: 0 2px;
-}
-.plan-cols .c1 { flex: 1; }
-.plan-cols .c2 { width: 142px; flex-shrink: 0; }
 .plan-list {
   flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; /* скрол не «протікає» на фон */
-  display: flex; flex-direction: column; gap: 8px;
+  display: flex; flex-direction: column; gap: 10px;
   margin: 0 -4px; padding: 2px 4px;
 }
-.plan-row { display: flex; gap: 8px; align-items: center; }
+/* рядок-картка: зверху текст справи, знизу три вибори (кому · розділ · важливість) */
+.plan-row {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--card-tint); border-radius: 14px; padding: 10px;
+}
+.plan-row-top { display: flex; gap: 8px; align-items: center; }
 .plan-text {
   flex: 1; min-width: 0;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
   padding: 12px 13px; font-size: 15px; font-family: inherit; color: var(--ink); outline: none;
 }
-.plan-who {
-  width: 104px; flex-shrink: 0;
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  padding: 12px 10px; font-size: 14px; font-weight: 600; font-family: inherit;
+.plan-row-opts { display: flex; gap: 6px; }
+.plan-opt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.plan-opt-label {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding-left: 2px;
+}
+.plan-opt select {
+  width: 100%; min-width: 0; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 8px; font-size: 13px; font-weight: 600; font-family: inherit;
   color: var(--ink); outline: none; cursor: pointer;
 }
 .plan-del {
@@ -545,6 +618,13 @@ html, body {
   display: flex; flex-direction: column; gap: 10px;
   overflow-y: auto; overflow-x: hidden; /* без горизонтального «листання» вікна */
   -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  min-height: 0; /* без цього flex-дитина не стискається і скрол не вмикається */
+  padding-bottom: 2px; /* щоб фокус-обведення не підрізалось при скролі */
+}
+/* дії, що лишаються на місці, поки вміст гортається (форма стала довгою) */
+.center-modal-foot {
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+  padding-top: 10px; border-top: 1px solid var(--line);
 }
 .center-modal-body input, .center-modal-body select, .center-modal-body textarea {
   width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; /* поле дати на iOS не розпирає вікно */

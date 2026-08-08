@@ -113,7 +113,10 @@ async def classify(raw_text: str, sender_role: str) -> Classification:
 class PlannedTask(BaseModel):
     text: str  # коротке чисте формулювання справи
     assignee: Literal["me", "manager", "assistant", "driver"] = "me"
-    category: Literal["production", "life", "dog", "logistics"] = "life"
+    # ключі розділу/важливості — не Literal, бо власниця додає свої (див. dictionaries.py).
+    # Що прийшло від моделі, перевіряємо по списку нижче.
+    category: str = ""
+    priority: str = ""
 
 
 class TaskPlan(BaseModel):
@@ -131,32 +134,57 @@ PLAN_SYSTEM_PROMPT = """Ти — диспетчер власниці прода�
     manager — зйомки, проєкти, контракти, продакшн
     assistant — побут, особисте, дім, здоровʼя, собака
     driver — поїздки, подачі авто, паливо, логістика
-- category: production | life | dog | logistics — напрям задачі (dog лише якщо саме про собаку)
+- category: розділ задачі — ТІЛЬКИ один із ключів у списку «Розділи» нижче. \
+Розділ і виконавець незалежні: «купити корм» — це про собаку, навіть якщо доручено водію
+- priority: важливість — ТІЛЬКИ один із ключів у списку «Важливість» нижче
 
 Правила:
 - якщо в диктовці кілька різних справ — поверни кілька елементів
 - якщо доручення одне — поверни рівно один елемент
-- не вигадуй задач, яких немає в тексті; нічого не пропускай"""
+- не вигадуй задач, яких немає в тексті; нічого не пропускай
+- не завищуй важливість: найвищий рівень — лише коли терміновість справді чути в тексті
+- не вигадуй ключів, яких немає у списках"""
 
 
-async def plan_tasks(raw_text: str) -> list[PlannedTask]:
-    """Ділить диктовку на список задач із підказкою виконавця.
+def _options_block(categories: list[tuple[str, str]], priorities: list[tuple[str, str]]) -> str:
+    cats = "\n".join(f"    {key} — {label}" for key, label in categories)
+    prios = "\n".join(f"    {key} — {label}" for key, label in priorities)
+    return f"Розділи (ключ — назва):\n{cats}\n\nВажливість (від найважливішої):\n{prios}"
+
+
+async def plan_tasks(
+    raw_text: str,
+    categories: list[tuple[str, str]],
+    priorities: list[tuple[str, str]],
+) -> list[PlannedTask]:
+    """Ділить диктовку на список задач із підказкою виконавця, розділу й важливості.
+    `categories`/`priorities` — актуальні довідники (ключ, назва) з БД.
     Без Claude (або при помилці) — повертає весь текст однією задачею на власницю."""
-    if settings.anthropic_api_key:
+    cat_keys = {k for k, _ in categories}
+    prio_keys = {k for k, _ in priorities}
+
+    if settings.anthropic_api_key and categories and priorities:
         client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        system = f"{PLAN_SYSTEM_PROMPT}\n\n{_options_block(categories, priorities)}"
         for attempt in range(2):
             try:
                 response = await client.messages.parse(
                     model=settings.claude_model,
                     max_tokens=1024,
-                    system=PLAN_SYSTEM_PROMPT,
+                    system=system,
                     messages=[{"role": "user", "content": raw_text}],
                     output_format=TaskPlan,
                 )
                 plan = response.parsed_output
                 if plan is not None and plan.tasks:
+                    # модель могла вигадати ключ — чистимо, далі підставиться дефолт
+                    for t in plan.tasks:
+                        if t.category not in cat_keys:
+                            t.category = ""
+                        if t.priority not in prio_keys:
+                            t.priority = ""
                     return plan.tasks
             except Exception:
                 log.exception("plan_tasks LLM call failed (attempt %s)", attempt + 1)
 
-    return [PlannedTask(text=raw_text.strip(), assignee="me", category="life")]
+    return [PlannedTask(text=raw_text.strip(), assignee="me")]

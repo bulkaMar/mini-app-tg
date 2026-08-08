@@ -38,3 +38,4 @@ export const post = (path, body) =>
   api(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) })
 export const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) })
 export const put = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) })
+export const del = (path) => api(path, { method: 'DELETE' })

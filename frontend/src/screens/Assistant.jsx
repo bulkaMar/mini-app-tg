@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NotificationBell, TabBar, TaskSheet, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -29,8 +29,6 @@ function Life({ me, category }) {
   const [tasks, setTasks] = useState(null)
   const [adding, setAdding] = useState(false)
   const [sel, setSel] = useState(null)
-  const [text, setText] = useState('')
-  const [toast, showToast] = useToast()
 
   const load = useCallback(
     () => get(`/api/tasks?category=${category}`).then(setTasks).catch(() => setTasks([])),
@@ -38,15 +36,6 @@ function Life({ me, category }) {
   )
   usePoll(load)
   useLiveSel(tasks, sel, setSel) // відкрита справа оновлюється наживо
-
-  const add = async () => {
-    if (!text.trim()) return
-    try {
-      await post('/api/tasks', { category, text: text.trim() })
-      setAdding(false); setText('')
-      load()
-    } catch (e) { showToast(e.message, 'warn') }
-  }
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   const isDog = category === 'dog'
@@ -67,7 +56,9 @@ function Life({ me, category }) {
         <button key={t.id} className="item" onClick={() => setSel(t)}>
           <span className="dot warn" />
           <span className="ico">{Icons[isDog ? 'dog' : 'home'](19)}</span>
+          <PriorityMark p={t.priority} />
           <span className="grow">{t.text}</span>
+          <ItemsBadge t={t} />
           <span className="tag warn">{t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}</span>
           <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
@@ -82,17 +73,15 @@ function Life({ me, category }) {
         </button>
       ))}
       {sel && (
-        <TaskSheet t={sel} color="var(--green)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--green)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
       {adding && (
-        <CenterModal title={isDog ? 'Нова справа про пса' : 'Нова справа'} onClose={() => setAdding(false)}>
-          <input placeholder="Напр.: записати на хімчистку" value={text}
-            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          <button className="btn-primary" style={{ background: 'var(--green)' }} onClick={add}>Зберегти</button>
-        </CenterModal>
+        <NewTaskModal defaultCategory={category} color="var(--green)"
+          title={isDog ? 'Нова справа про пса' : 'Нова справа'}
+          placeholder="Напр.: записати на хімчистку"
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
       )}
-      {toast}
     </div>
   )
 }

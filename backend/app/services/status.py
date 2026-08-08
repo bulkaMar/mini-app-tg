@@ -106,6 +106,8 @@ async def compute_dashboard(session: AsyncSession) -> dict:
             "life_open": life_open,
             "production_open": by_cat.get("production", 0),
             "logistics_open": logistics_open,
+            # відкриті задачі по кожному розділу — щоб малювати й власні розділи власниці
+            "by_category": by_cat,
             "risk_active": risk_count,
             "spent": round(float(spent)),
             "budget": budget,

@@ -132,4 +132,5 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
 
 
 def allowed_categories(user: User) -> set[str]:
+    """Базові теми для стрічки й фінансів. Розділи задач — у dictionaries.py (БД)."""
     return ROLE_CATEGORIES.get(user.role, set())

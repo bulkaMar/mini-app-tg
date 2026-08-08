@@ -1,17 +1,35 @@
 import asyncio
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..classifier import Classification, classify, plan_tasks
+from ..classifier import classify, plan_tasks
 from ..config import settings
-from ..models import BudgetItem, Expense, Message, Risk, Task, User
+from ..models import (
+    BudgetItem, Expense, Message, Risk, Task, TaskCategory, TaskItem, TaskPriority, User,
+)
+from ..services.dictionaries import (
+    all_categories,
+    all_priorities,
+    default_priority_key,
+    new_key,
+    priority_keys,
+    usable_categories,
+    visible_categories,
+)
 from ..services.notify import route_notifications
-from ..services.saver import parse_due, resolve_target_role, save_classified, save_owner_task
+from ..services.saver import (
+    parse_due,
+    resolve_assignee_category,
+    resolve_target_role,
+    save_classified,
+    save_owner_task,
+)
 from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
 from .auth import InitDataError, validate_init_data
@@ -19,6 +37,52 @@ from .deps import allowed_categories, get_current_user, get_session, require_own
 from .events import subscribe, unsubscribe
 
 router = APIRouter(prefix="/api")
+
+COLORS = ("blue", "green", "gold", "orange", "red", "ink", "warn", "muted")
+
+
+ITEM_KINDS = ("subtask", "check")
+MAX_ITEMS = 50  # запобіжник, щоб одна задача не роздулась нескінченним списком
+
+
+async def _replace_items(session: AsyncSession, task_id: int, items) -> None:
+    """Повністю замінює пункти задачі присланим списком (порядок = порядок у списку)."""
+    await session.execute(delete(TaskItem).where(TaskItem.task_id == task_id))
+    pos = 0
+    for it in items[:MAX_ITEMS]:
+        kind = it.get("kind") if isinstance(it, dict) else it.kind
+        text = (it.get("text") if isinstance(it, dict) else it.text) or ""
+        done = bool(it.get("done") if isinstance(it, dict) else it.done)
+        text = str(text).strip()
+        if kind not in ITEM_KINDS or not text:
+            continue
+        session.add(TaskItem(task_id=task_id, kind=kind, text=text, done=done, position=pos))
+        pos += 1
+
+
+async def _items_by_task(session: AsyncSession, task_ids: list[int]) -> dict[int, list[dict]]:
+    """Пункти для пачки задач одним запитом — щоб не смикати БД на кожен рядок."""
+    if not task_ids:
+        return {}
+    rows = (await session.execute(
+        select(TaskItem)
+        .where(TaskItem.task_id.in_(task_ids))
+        .order_by(TaskItem.position.asc(), TaskItem.id.asc())
+    )).scalars().all()
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r.task_id, []).append(
+            {"id": r.id, "kind": r.kind, "text": r.text, "done": r.done}
+        )
+    return out
+
+
+async def _check_task_category(session: AsyncSession, user: User, key: str) -> None:
+    """Немає такого розділу — це помилка запиту; є, але закритий ролі — заборона."""
+    if key not in {c.key for c in await all_categories(session)}:
+        raise HTTPException(status_code=400, detail="Такого розділу немає")
+    if key not in await usable_categories(session, user):
+        raise HTTPException(status_code=403, detail="category not allowed for your role")
 
 
 @router.get("/events")
@@ -63,7 +127,9 @@ async def events(request: Request, auth: str | None = Query(default=None)):
 # ---------- me / dashboard ----------
 
 @router.get("/me")
-async def me(user: User = Depends(get_current_user)) -> dict:
+async def me(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> dict:
     return {
         "telegram_id": user.telegram_id,
         "name": user.name,
@@ -71,6 +137,8 @@ async def me(user: User = Depends(get_current_user)) -> dict:
         "role": user.role,
         "role_label": ROLE_LABELS.get(user.role, user.role),
         "permissions": user.permissions or {},
+        # у які розділи ця людина може класти задачі — з цього фронт будує вибір
+        "task_categories": await usable_categories(session, user),
     }
 
 
@@ -88,7 +156,9 @@ async def feed(
     """Стрічка повідомлень: owner — усі, інші — тільки свої категорії."""
     q = select(Message).order_by(Message.created_at.desc()).limit(30)
     if user.role != "owner":
-        q = q.where(Message.category.in_(allowed_categories(user)))
+        # базові теми ролі (зокрема finance) + розділи задач, які їй видно
+        cats = allowed_categories(user) | await visible_categories(session, user)
+        q = q.where(Message.category.in_(cats))
     rows = (await session.execute(q)).scalars().all()
     return [
         {
@@ -105,12 +175,239 @@ async def feed(
     ]
 
 
+# ---------- довідники: розділи задач і рівні важливості ----------
+# Читати може будь-хто (без назв не намалювати списки), змінювати — тільки власниця.
+
+
+def _cat_out(c: TaskCategory, usable: set[str]) -> dict:
+    return {
+        "id": c.id, "key": c.key, "label": c.label, "icon": c.icon, "color": c.color,
+        "roles": c.roles or [], "is_system": c.is_system, "can_use": c.key in usable,
+    }
+
+
+def _prio_out(p: TaskPriority) -> dict:
+    return {
+        "id": p.id, "key": p.key, "label": p.label, "icon": p.icon, "color": p.color,
+        "rank": p.rank, "is_default": p.is_default, "is_system": p.is_system,
+    }
+
+
+@router.get("/dictionaries")
+async def dictionaries(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Розділи (лише ті, що людині видно) + усі рівні важливості."""
+    visible = await visible_categories(session, user)
+    usable = set(await usable_categories(session, user))
+    return {
+        "categories": [_cat_out(c, usable) for c in await all_categories(session) if c.key in visible],
+        "priorities": [_prio_out(p) for p in await all_priorities(session)],
+    }
+
+
+class CategoryIn(BaseModel):
+    label: str
+    icon: str = "task"
+    color: str = "orange"
+    roles: list[str] = []
+
+
+@router.post("/categories")
+async def create_category(
+    body: CategoryIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    label = body.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Назва розділу не може бути порожньою")
+    rows = await all_categories(session)
+    if any(c.label.lower() == label.lower() for c in rows):
+        raise HTTPException(status_code=409, detail="Розділ із такою назвою вже є")
+    cat = TaskCategory(
+        key=await new_key(session, "c", TaskCategory),
+        label=label,
+        icon=body.icon or "task",
+        color=body.color if body.color in COLORS else "orange",
+        roles=[r for r in body.roles if r in ("manager", "assistant", "driver")],
+        is_system=False,
+        sort=max((c.sort for c in rows), default=100) + 10,
+    )
+    session.add(cat)
+    await session.commit()
+    return {"id": cat.id, "key": cat.key, "ok": True}
+
+
+@router.patch("/categories/{cat_id}")
+async def update_category(
+    cat_id: int,
+    body: dict,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Перейменувати / змінити вигляд і те, хто бачить. Системний розділ — теж можна."""
+    cat = (await session.execute(select(TaskCategory).where(TaskCategory.id == cat_id))).scalar_one_or_none()
+    if cat is None:
+        raise HTTPException(status_code=404)
+    if isinstance(body.get("label"), str) and body["label"].strip():
+        cat.label = body["label"].strip()
+    if isinstance(body.get("icon"), str) and body["icon"].strip():
+        cat.icon = body["icon"].strip()
+    if body.get("color") in COLORS:
+        cat.color = body["color"]
+    if isinstance(body.get("roles"), list):
+        cat.roles = [r for r in body["roles"] if r in ("manager", "assistant", "driver")]
+    await session.commit()
+    return {"ok": True}
+
+
+@router.delete("/categories/{cat_id}")
+async def delete_category(
+    cat_id: int,
+    move_to: str | None = Query(default=None),
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Видаляє свій розділ. Якщо в ньому є справи — просимо вказати, куди їх перенести."""
+    cat = (await session.execute(select(TaskCategory).where(TaskCategory.id == cat_id))).scalar_one_or_none()
+    if cat is None:
+        raise HTTPException(status_code=404)
+    if cat.is_system:
+        raise HTTPException(
+            status_code=409,
+            detail="Це системний розділ — на ньому побудовані екрани. Його можна перейменувати, але не видалити",
+        )
+
+    count = (await session.execute(
+        select(func.count()).select_from(Task).where(Task.category == cat.key, Task.deleted_at.is_(None))
+    )).scalar_one()
+    if count:
+        others = [c.key for c in await all_categories(session) if c.key != cat.key]
+        if move_to not in others:
+            raise HTTPException(
+                status_code=409,
+                detail=f"tasks_present:{count}",  # фронт спитає, куди перенести
+            )
+        await session.execute(
+            update(Task).where(Task.category == cat.key).values(category=move_to)
+        )
+    await session.delete(cat)
+    await session.commit()
+    return {"ok": True, "moved": count}
+
+
+class PriorityIn(BaseModel):
+    label: str
+    icon: str | None = None
+    color: str = "muted"
+
+
+@router.post("/priorities")
+async def create_priority(
+    body: PriorityIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Новий рівень стає найменш важливим — далі його можна підняти стрілками."""
+    label = body.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Назва рівня не може бути порожньою")
+    rows = await all_priorities(session)
+    if any(p.label.lower() == label.lower() for p in rows):
+        raise HTTPException(status_code=409, detail="Рівень із такою назвою вже є")
+    prio = TaskPriority(
+        key=await new_key(session, "p", TaskPriority),
+        label=label,
+        icon=(body.icon or None),
+        color=body.color if body.color in COLORS else "muted",
+        rank=max((p.rank for p in rows), default=50) + 10,
+        is_default=False,
+        is_system=False,
+    )
+    session.add(prio)
+    await session.commit()
+    return {"id": prio.id, "key": prio.key, "ok": True}
+
+
+@router.patch("/priorities/{prio_id}")
+async def update_priority(
+    prio_id: int,
+    body: dict,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    prio = (await session.execute(select(TaskPriority).where(TaskPriority.id == prio_id))).scalar_one_or_none()
+    if prio is None:
+        raise HTTPException(status_code=404)
+    if isinstance(body.get("label"), str) and body["label"].strip():
+        prio.label = body["label"].strip()
+    if "icon" in body:
+        icon = body["icon"]
+        prio.icon = icon.strip() if isinstance(icon, str) and icon.strip() else None
+    if body.get("color") in COLORS:
+        prio.color = body["color"]
+    await session.commit()
+    return {"ok": True}
+
+
+class PriorityOrderIn(BaseModel):
+    ids: list[int]
+
+
+@router.put("/priorities/order")
+async def reorder_priorities(
+    body: PriorityOrderIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Порядок згори вниз: перший — найважливіший."""
+    rows = {p.id: p for p in await all_priorities(session)}
+    for i, pid in enumerate(body.ids):
+        if pid in rows:
+            rows[pid].rank = i * 10
+    await session.commit()
+    return {"ok": True}
+
+
+@router.delete("/priorities/{prio_id}")
+async def delete_priority(
+    prio_id: int,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Задачі з цим рівнем стають звичайними — нічого не губиться."""
+    prio = (await session.execute(select(TaskPriority).where(TaskPriority.id == prio_id))).scalar_one_or_none()
+    if prio is None:
+        raise HTTPException(status_code=404)
+    if prio.is_default:
+        raise HTTPException(
+            status_code=409,
+            detail="Це рівень за замовчуванням — на нього падають задачі з видалених рівнів",
+        )
+    fallback = await default_priority_key(session)
+    await session.execute(
+        update(Task).where(Task.priority == prio.key).values(priority=fallback)
+    )
+    await session.delete(prio)
+    await session.commit()
+    return {"ok": True}
+
+
 # ---------- tasks ----------
+
+class TaskItemIn(BaseModel):
+    kind: str = "subtask"
+    text: str
+    done: bool = False
+
 
 class TaskIn(BaseModel):
     category: str
     text: str
     due: str | None = None
+    priority: str = "normal"
+    items: list[TaskItemIn] = []
 
 
 @router.get("/tasks")
@@ -119,31 +416,46 @@ async def list_tasks(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
-    cats = allowed_categories(user)
+    cats = await visible_categories(session, user)
     if category:
         if category not in cats:
             raise HTTPException(status_code=403, detail="category not allowed for your role")
-        cats = {category}
+        where = Task.category == category
+    else:
+        # видно розділи своєї ролі + усе, що доручено особисто тобі в чужому розділі
+        where = or_(Task.category.in_(cats), Task.owner_role == user.role)
+    # порядок важливості беремо з довідника (rank); рівень міг зникнути → у кінець
     q = (
         select(Task)
-        .where(Task.deleted_at.is_(None), Task.category.in_(cats))
-        .order_by(Task.status.asc(), Task.created_at.desc())
+        .outerjoin(TaskPriority, TaskPriority.key == Task.priority)
+        .where(Task.deleted_at.is_(None), where)
+        .order_by(
+            Task.status.asc(),
+            func.coalesce(TaskPriority.rank, 1000),
+            Task.created_at.desc(),
+        )
         .limit(100)
     )
     rows = (await session.execute(q)).scalars().all()
-    return [
-        {
+    items = await _items_by_task(session, [t.id for t in rows])
+    out = []
+    for t in rows:
+        its = items.get(t.id, [])
+        out.append({
             "id": t.id,
             "category": t.category,
             "text": t.text,
             "status": t.status,
+            "priority": t.priority or "normal",
             "owner_role": t.owner_role,
             "due": t.due.isoformat() if t.due else None,
             "done_at": t.done_at.isoformat() if t.done_at else None,
             "time": t.created_at.isoformat() if t.created_at else None,
-        }
-        for t in rows
-    ]
+            "items": its,
+            "items_total": len(its),
+            "items_done": sum(1 for i in its if i["done"]),
+        })
+    return out
 
 
 @router.post("/tasks")
@@ -152,16 +464,20 @@ async def create_task(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    if body.category not in allowed_categories(user):
-        raise HTTPException(status_code=403, detail="category not allowed for your role")
+    await _check_task_category(session, user, body.category)
+    prios = await priority_keys(session)
     task = Task(
         telegram_id=user.telegram_id,
         category=body.category,
         text=body.text,
         owner_role=user.role,
+        priority=body.priority if body.priority in prios else await default_priority_key(session),
         due=parse_due(body.due),
     )
     session.add(task)
+    await session.flush()  # потрібен id, щоб прив'язати підзадачі/чекліст
+    if body.items:
+        await _replace_items(session, task.id, body.items)
     await session.commit()
     return {"id": task.id, "ok": True}
 
@@ -176,12 +492,21 @@ async def update_task(
     task = (await session.execute(select(Task).where(Task.id == task_id))).scalar_one_or_none()
     if task is None or task.deleted_at is not None:
         raise HTTPException(status_code=404)
-    if user.role != "owner" and task.category not in allowed_categories(user):
+    # правити може той, кому відкритий розділ, або той, кому задачу доручено
+    if task.category not in await visible_categories(session, user) and task.owner_role != user.role:
         raise HTTPException(status_code=403)
     if isinstance(body.get("text"), str) and body["text"].strip():
         task.text = body["text"].strip()
     if "due" in body:
         task.due = parse_due(body["due"])
+    if body.get("category") and body["category"] != task.category:
+        await _check_task_category(session, user, body["category"])
+        task.category = body["category"]
+    if body.get("priority") in await priority_keys(session):
+        task.priority = body["priority"]
+    if isinstance(body.get("items"), list):
+        await _replace_items(session, task.id, body["items"])
+        task.updated_at = datetime.now(timezone.utc)  # щоб живі оновлення побачили зміну
     if body.get("status") in ("open", "done"):
         task.status = body["status"]
         task.done_at = datetime.now(timezone.utc) if body["status"] == "done" else None
@@ -545,6 +870,7 @@ class PlannedTaskIn(BaseModel):
     text: str
     assignee: str = "me"
     category: str | None = None
+    priority: str = "normal"
 
 
 class TasksIn(BaseModel):
@@ -554,20 +880,42 @@ class TasksIn(BaseModel):
 def _plan_payload(transcript: str, tasks) -> dict:
     return {
         "transcript": transcript,
-        "tasks": [{"text": t.text, "assignee": t.assignee, "category": t.category} for t in tasks],
+        "tasks": [
+            {
+                "text": t.text,
+                "assignee": t.assignee,
+                "category": t.category,
+                "priority": t.priority,
+            }
+            for t in tasks
+        ],
     }
 
 
+async def _plan_options(session: AsyncSession) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Актуальні розділи й рівні важливості — щоб AI розкладав по тому, що є зараз."""
+    cats = [(c.key, c.label) for c in await all_categories(session)]
+    prios = [(p.key, p.label) for p in await all_priorities(session)]
+    return cats, prios
+
+
 @router.post("/ingest/plan")
-async def ingest_plan(body: PlanIn, user: User = Depends(require_owner)) -> dict:
+async def ingest_plan(
+    body: PlanIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     """Текст → список задач із підказкою виконавця (без збереження)."""
-    tasks = await plan_tasks(body.text)
+    cats, prios = await _plan_options(session)
+    tasks = await plan_tasks(body.text, cats, prios)
     return _plan_payload(body.text, tasks)
 
 
 @router.post("/ingest/voice/plan")
 async def ingest_voice_plan(
-    file: UploadFile, user: User = Depends(require_owner)
+    file: UploadFile,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Голос → розшифровка → список задач (без збереження)."""
     if not settings.openai_api_key:
@@ -576,7 +924,8 @@ async def ingest_voice_plan(
     text = await transcribe(audio, filename=file.filename or "voice.webm")
     if not text:
         raise HTTPException(status_code=422, detail="Не вдалося розшифрувати голос — спробуй ще раз")
-    tasks = await plan_tasks(text)
+    cats, prios = await _plan_options(session)
+    tasks = await plan_tasks(text, cats, prios)
     return _plan_payload(text, tasks)
 
 
@@ -587,18 +936,33 @@ async def ingest_tasks(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Зберігає роздані задачі пачкою + штовхає пуш кожному виконавцю (крім «я»)."""
+    valid_cats = set(await usable_categories(session, user))
+    valid_prios = await priority_keys(session)
+    fallback_prio = await default_priority_key(session)
+
     saved = []
     for t in body.tasks:
         if not t.text.strip():
             continue
         assignee = t.assignee if t.assignee in ("me", "manager", "assistant", "driver") else "me"
-        saved.append(await save_owner_task(session, user, t.text.strip(), assignee, t.category))
+        saved.append(await save_owner_task(
+            session,
+            user,
+            t.text.strip(),
+            assignee,
+            resolve_assignee_category(assignee, t.category, valid_cats),
+            t.priority if t.priority in valid_prios else fallback_prio,
+        ))
     await session.commit()
 
     for s in saved:
         if s["assignee"] == "me":
             continue
-        c = Classification(type="task", category=s["category"], text=s["text"], owner=s["assignee"])
-        await route_notifications(session, user, c)
+        # не Classification: розділ може бути власним ключем власниці, а не з фіксованого
+        # переліку класифікатора. Для пуша важливі лише тип, текст і адресат.
+        note = SimpleNamespace(
+            type="task", category=s["category"], text=s["text"], owner=s["assignee"]
+        )
+        await route_notifications(session, user, note)
 
     return {"count": len(saved)}

@@ -36,7 +36,85 @@ export const Icons = {
   trash: (s) => <I size={s}><path d="M4 7h16" /><path d="M9.5 7V5a1.5 1.5 0 011.5-1.5h2A1.5 1.5 0 0114.5 5v2" /><path d="M6.5 7l1 13h9l1-13" /><path d="M10 11v5M14 11v5" /></I>,
   undo: (s) => <I size={s}><path d="M4 10h10a5 5 0 110 10h-3" /><path d="M8 6l-4 4 4 4" /></I>,
   comment: (s) => <I size={s}><path d="M21 11.5A8.5 8.5 0 0112.5 20c-1.3 0-2.5-.25-3.6-.7L4 21l1.2-4A8.4 8.4 0 014 11.5a8.5 8.5 0 0117 0z" /></I>,
+  // важливість: полум'я — супер термінова, подвійна стрілка вгору — важлива
+  flame: (s) => <I size={s}><path d="M12 21a6 6 0 006-6c0-4-3.5-6.5-6-9.5-2.5 3-6 5.5-6 9.5a6 6 0 006 6z" /><path d="M12 21a2.6 2.6 0 002.6-2.6c0-1.7-1.6-2.7-2.6-4.1-1 1.4-2.6 2.4-2.6 4.1A2.6 2.6 0 0012 21z" /></I>,
+  up: (s) => <I size={s}><path d="M6 13l6-6 6 6" /><path d="M6 18l6-6 6 6" /></I>,
+  gear: (s) => <I size={s}><circle cx="12" cy="12" r="3.2" /><path d="M19.4 14.5a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5v.2a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H2a2 2 0 010-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H10a1.6 1.6 0 001-1.5V2a2 2 0 014 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V10a1.6 1.6 0 001.5 1h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.5 1z" /></I>,
+  chevUp: (s) => <I size={s}><path d="M6 15l6-6 6 6" /></I>,
+  chevDown: (s) => <I size={s}><path d="M6 9l6 6 6-6" /></I>,
 }
+
+/* ---------- розділи задач і рівні важливості ----------
+   Живуть у БД: власниця додає/перейменовує/видаляє свої (екран «Розділи та важливість»).
+   Тут — спільний кеш на весь застосунок: одне завантаження, усі підписники оновлюються
+   разом, у т.ч. миттєво при зміні на сервері (SSE). */
+
+const COLOR_VAR = {
+  blue: 'var(--blue)', green: 'var(--green)', gold: 'var(--gold)', orange: 'var(--orange)',
+  red: 'var(--red)', ink: 'var(--ink)', warn: 'var(--warn)', muted: 'var(--muted)',
+}
+export const COLOR_KEYS = Object.keys(COLOR_VAR)
+export const colorVar = (c) => COLOR_VAR[c] || 'var(--orange)'
+
+// іконки, які можна поставити своєму розділу чи рівню важливості
+export const PICKABLE_ICONS = [
+  'task', 'film', 'home', 'dog', 'pin', 'truck', 'fuel', 'cart',
+  'wallet', 'alert', 'flame', 'up', 'clock', 'bell', 'shield', 'pulse',
+]
+
+let _dict = { categories: [], priorities: [] }
+let _dictLoaded = false
+const _dictSubs = new Set()
+
+async function loadDictionaries() {
+  try {
+    const d = await get('/api/dictionaries')
+    if (!d || !Array.isArray(d.categories) || !Array.isArray(d.priorities)) return
+    _dict = d
+    _dictLoaded = true
+    _dictSubs.forEach((fn) => { try { fn(d) } catch { /* ok */ } })
+  } catch { /* бек недоступний — списки лишаться порожніми, екрани не падають */ }
+}
+
+export function useDictionaries() {
+  const [d, setD] = useState(_dict)
+  useEffect(() => {
+    _dictSubs.add(setD)
+    if (!_dictLoaded) loadDictionaries()
+    const off = onLiveChange(loadDictionaries) // хтось змінив довідник → оновлюємось
+    return () => { _dictSubs.delete(setD); off() }
+  }, [])
+  return d
+}
+export const refreshDictionaries = loadDictionaries
+
+export const findCat = (dict, key) => dict?.categories?.find((c) => c.key === key)
+export const findPrio = (dict, key) => dict?.priorities?.find((p) => p.key === key)
+// варіанти для Segmented: тільки ті розділи, куди цій людині можна класти задачі
+export const catOptions = (dict) => (dict?.categories || [])
+  .filter((c) => c.can_use)
+  .map((c) => ({ value: c.key, label: c.label, icon: c.icon, color: colorVar(c.color) }))
+export const prioOptions = (dict) => (dict?.priorities || [])
+  .map((p) => ({ value: p.key, label: p.label, icon: p.icon, color: colorVar(p.color) }))
+
+/* позначка важливості в рядку списку (рівень за замовчуванням не позначаємо) */
+export function PriorityMark({ p }) {
+  const dict = useDictionaries()
+  const prio = findPrio(dict, p)
+  if (!prio || prio.is_default) return null
+  const color = colorVar(prio.color)
+  return (
+    <span className="prio" style={{ color }} title={prio.label}>
+      {prio.icon && Icons[prio.icon]
+        ? Icons[prio.icon](15)
+        : <span className="prio-dot" style={{ background: color }} />}
+    </span>
+  )
+}
+
+/* найважливіші — вгору (для списків, зібраних із кількох розділів) */
+export const byPriority = (dict) => (a, b) =>
+  (findPrio(dict, a.priority)?.rank ?? 1000) - (findPrio(dict, b.priority)?.rank ?? 1000)
 
 export const ROLE_COLOR = { owner: 'var(--ink)', manager: 'var(--blue)', assistant: 'var(--green)', driver: 'var(--gold)' }
 export const ROLE_BADGE = { owner: 'ВЛАСНИК', manager: 'МЕНЕДЖЕР', assistant: 'АСИСТЕНТ', driver: 'ВОДІЙ' }
@@ -347,6 +425,227 @@ function useLockScroll() {
   }, [])
 }
 
+/* ---------- поле з підписом і вибір «одне з кількох» ---------- */
+
+export function Field({ label, children }) {
+  return (
+    <div className="field">
+      <div className="field-label">{label}</div>
+      {children}
+    </div>
+  )
+}
+
+export function Segmented({ options, value, onChange, color = 'var(--orange)' }) {
+  return (
+    <div className="seg">
+      {options.map((o) => {
+        const on = value === o.value
+        const c = o.color || color
+        return (
+          <button
+            key={o.value}
+            type="button"
+            className={`seg-btn ${on ? 'on' : ''}`}
+            style={on ? { background: c, borderColor: c } : undefined}
+            onClick={() => { haptic(); onChange(o.value) }}
+          >
+            {o.icon && Icons[o.icon]?.(15)}
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------- підзадачі та чекліст усередині задачі ----------
+   Підзадачі — нумерований список, чекліст — галочки. Пункт додається/редагується
+   в окремому віконці поверх, після чого воно закривається й пункт видно у списку. */
+
+const ITEM_KINDS = {
+  subtask: { title: 'Підзадачі', one: 'підзадачу', add: 'Додати підзадачу', modal: 'Підзадача' },
+  check: { title: 'Чекліст', one: 'пункт', add: 'Додати пункт', modal: 'Пункт чеклісту' },
+}
+
+function ItemModal({ kind, item, color, onClose, onSave, onDelete }) {
+  const [text, setText] = useState(item?.text || '')
+  const cfg = ITEM_KINDS[kind]
+  const valid = text.trim()
+  const submit = () => { if (valid) { onSave(text.trim()); onClose() } }
+
+  return (
+    <CenterModal
+      title={item ? cfg.modal : `Нова ${cfg.one}`}
+      onClose={onClose}
+      footer={(
+        <>
+          <button className="btn-primary" style={{ background: color, opacity: valid ? 1 : 0.45 }}
+            disabled={!valid} onClick={submit}>
+            {item ? 'Зберегти' : 'Додати'}
+          </button>
+          {item && (
+            <button className="btn-small ghost danger" onClick={() => { onDelete(); onClose() }}>
+              {Icons.trash(15)} Прибрати
+            </button>
+          )}
+        </>
+      )}
+    >
+      <textarea rows={2} value={text} autoFocus placeholder="Що саме треба зробити"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() } }} />
+    </CenterModal>
+  )
+}
+
+export function TaskItemsEditor({ items, onChange, color = 'var(--orange)' }) {
+  const [editing, setEditing] = useState(null) // { kind, index|null }
+
+  const list = (kind) => items.map((it, i) => ({ it, i })).filter(({ it }) => it.kind === kind)
+  const toggle = (i) => {
+    haptic()
+    onChange(items.map((it, idx) => (idx === i ? { ...it, done: !it.done } : it)))
+  }
+  const saveText = (kind, index, text) => {
+    haptic()
+    if (index === null) onChange([...items, { kind, text, done: false }])
+    else onChange(items.map((it, idx) => (idx === index ? { ...it, text } : it)))
+  }
+  const removeAt = (index) => { haptic(); onChange(items.filter((_, idx) => idx !== index)) }
+
+  const section = (kind) => {
+    const rows = list(kind)
+    const cfg = ITEM_KINDS[kind]
+    return (
+      <Field label={rows.length ? `${cfg.title} · ${rows.filter(({ it }) => it.done).length}/${rows.length}` : cfg.title}>
+        {rows.map(({ it, i }, n) => (
+          <div key={i} className={`ti-row ${it.done ? 'done' : ''}`}>
+            <button type="button" className="ti-tick" aria-label={it.done ? 'Зняти' : 'Виконано'}
+              style={it.done ? { background: color, borderColor: color } : undefined}
+              onClick={() => toggle(i)}>
+              {kind === 'subtask'
+                ? (it.done ? Icons.check(13) : <span className="ti-num">{n + 1}</span>)
+                : (it.done ? Icons.check(13) : null)}
+            </button>
+            <span className="ti-text" role="button" tabIndex={0} onClick={() => toggle(i)}>{it.text}</span>
+            <button type="button" className="btn-icon" aria-label="Змінити"
+              onClick={() => setEditing({ kind, index: i })}>{Icons.pencil(14)}</button>
+          </div>
+        ))}
+        <button type="button" className="btn-dashed slim" style={{ color }}
+          onClick={() => setEditing({ kind, index: null })}>
+          {Icons.plus(16)} {cfg.add}
+        </button>
+      </Field>
+    )
+  }
+
+  return (
+    <>
+      {section('subtask')}
+      {section('check')}
+      {editing && (
+        <ItemModal
+          kind={editing.kind}
+          item={editing.index === null ? null : items[editing.index]}
+          color={color}
+          onClose={() => setEditing(null)}
+          onSave={(text) => saveText(editing.kind, editing.index, text)}
+          onDelete={() => removeAt(editing.index)}
+        />
+      )}
+    </>
+  )
+}
+
+/* лічильник виконаних пунктів у рядку списку задач */
+export function ItemsBadge({ t }) {
+  if (!t.items_total) return null
+  const all = t.items_done === t.items_total
+  return (
+    <span className={`tag ${all ? 'ok' : 'muted'}`} title="Підзадачі та чекліст">
+      {t.items_done}/{t.items_total}
+    </span>
+  )
+}
+
+/* ---------- нова задача: текст + розділ + важливість + дедлайн ----------
+   Одне вікно на всі екрани — розділи приходять із /api/me (що дозволено ролі). */
+export function NewTaskModal({
+  defaultCategory,
+  color = 'var(--orange)',
+  title = 'Нова задача',
+  placeholder = 'Що треба зробити',
+  onClose,
+  onSaved,
+}) {
+  const dict = useDictionaries()
+  const cats = catOptions(dict)
+  const prios = prioOptions(dict)
+  const defPrio = dict.priorities?.find((p) => p.is_default)?.key || prios[prios.length - 1]?.value
+
+  const [text, setText] = useState('')
+  const [category, setCategory] = useState(defaultCategory || '')
+  const [priority, setPriority] = useState('')
+  const [due, setDue] = useState('')
+  const [items, setItems] = useState([]) // підзадачі й чекліст — поки задачі немає, тримаємо тут
+  const [busy, setBusy] = useState(false)
+  const [toast, showToast] = useToast()
+
+  // довідники приїжджають асинхронно — підставляємо дефолти, коли вони готові
+  useEffect(() => {
+    if (!cats.some((c) => c.value === category)) setCategory(cats[0]?.value || '')
+  }, [dict.categories]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!prios.some((p) => p.value === priority)) setPriority(defPrio || '')
+  }, [dict.priorities]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const valid = text.trim() && category && priority
+
+  const save = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    try {
+      await post('/api/tasks', { text: text.trim(), category, priority, due: due || null, items })
+      haptic('medium')
+      onSaved()
+    } catch (e) { showToast(e.message, 'warn'); setBusy(false) }
+  }
+
+  return (
+    <CenterModal
+      title={title}
+      onClose={onClose}
+      footer={(
+        <button className="btn-primary" style={{ background: color, opacity: valid ? 1 : 0.45 }}
+          disabled={busy || !valid} onClick={save}>
+          {busy ? 'Зберігаю…' : 'Зберегти'}
+        </button>
+      )}
+    >
+      <input placeholder={placeholder} value={text} autoFocus
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && save()} />
+      {cats.length > 1 && (
+        <Field label="Розділ">
+          <Segmented options={cats} value={category} onChange={setCategory} color={color} />
+        </Field>
+      )}
+      {prios.length > 1 && (
+        <Field label="Важливість">
+          <Segmented options={prios} value={priority} onChange={setPriority} color={color} />
+        </Field>
+      )}
+      <Field label="Дедлайн (необов'язково)">
+        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+      </Field>
+      <TaskItemsEditor items={items} onChange={setItems} color={color} />
+      {toast}
+    </CenterModal>
+  )
+}
+
 /* варіанти виконавців для колонки «Кому» */
 const ASSIGNEES = [
   { value: 'me', label: 'Я' },
@@ -357,22 +656,49 @@ const ASSIGNEES = [
 
 /* ---------- центральне вікно «Перевір і роздай»: список справ + кому ----------
    Одна диктовка ділиться на кілька задач; текст і виконавця можна змінити. */
+// розділ за замовчуванням, якщо AI його не підказав — за виконавцем
+const ASSIGNEE_CATEGORY = { manager: 'production', assistant: 'life', driver: 'logistics', me: 'life' }
+
 export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved }) {
+  const dict = useDictionaries()
+  const cats = catOptions(dict)
+  const prios = prioOptions(dict)
+  const defPrio = dict.priorities?.find((p) => p.is_default)?.key || prios[prios.length - 1]?.value
+  // розділ за виконавцем міг бути перейменований/видалений — тоді беремо перший наявний
+  const fallbackCat = (assignee) => {
+    const byRole = ASSIGNEE_CATEGORY[assignee]
+    return cats.some((c) => c.value === byRole) ? byRole : cats[0]?.value || ''
+  }
+
   const [rows, setRows] = useState(() => {
-    const src = plan?.tasks?.length ? plan.tasks : [{ text: plan?.transcript || '', assignee: 'me', category: null }]
+    const src = plan?.tasks?.length ? plan.tasks : [{ text: plan?.transcript || '', assignee: 'me' }]
     return src.map((t, i) => ({
       rid: i,
       text: t.text || '',
       assignee: ASSIGNEES.some((a) => a.value === t.assignee) ? t.assignee : 'me',
-      category: t.category || null,
+      category: t.category || '',
+      priority: t.priority || '',
     }))
   })
   const [busy, setBusy] = useState(false)
   const [toast, showToast] = useToast()
   useLockScroll()
 
+  // довідники могли ще не приїхати, коли вікно відкрилось → доповнюємо порожні поля
+  useEffect(() => {
+    if (!cats.length || !prios.length) return
+    setRows((rs) => rs.map((r) => ({
+      ...r,
+      category: cats.some((c) => c.value === r.category) ? r.category : fallbackCat(r.assignee),
+      priority: prios.some((p) => p.value === r.priority) ? r.priority : defPrio,
+    })))
+  }, [dict.categories, dict.priorities]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const setText = (rid, v) => setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, text: v } : r)))
-  const setWho = (rid, v) => { haptic(); setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, assignee: v } : r))) }
+  const setField = (rid, field, v) => {
+    haptic()
+    setRows((rs) => rs.map((r) => (r.rid === rid ? { ...r, [field]: v } : r)))
+  }
   const removeRow = (rid) => { haptic(); setRows((rs) => rs.filter((r) => r.rid !== rid)) }
 
   const valid = rows.filter((r) => r.text.trim())
@@ -382,7 +708,9 @@ export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved 
     setBusy(true)
     try {
       const r = await post('/api/ingest/tasks', {
-        tasks: valid.map((r) => ({ text: r.text.trim(), assignee: r.assignee, category: r.category })),
+        tasks: valid.map((r) => ({
+          text: r.text.trim(), assignee: r.assignee, category: r.category, priority: r.priority,
+        })),
       })
       haptic('medium')
       onSaved?.(r, valid.length)
@@ -399,27 +727,42 @@ export function TaskPlanModal({ plan, color = 'var(--orange)', onClose, onSaved 
           <h2>Перевір і роздай</h2>
           <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
         </div>
-        <div className="plan-cols">
-          <span className="c1">Справа</span>
-          <span className="c2">Кому</span>
-        </div>
         <div className="plan-list">
           {rows.map((r) => (
             <div className="plan-row" key={r.rid}>
-              <input
-                className="plan-text"
-                value={r.text}
-                placeholder="Текст справи"
-                onChange={(e) => setText(r.rid, e.target.value)}
-              />
-              <select className="plan-who" value={r.assignee} onChange={(e) => setWho(r.rid, e.target.value)}>
-                {ASSIGNEES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-              </select>
-              {rows.length > 1 && (
-                <button className="plan-del" aria-label="Прибрати справу" onClick={() => removeRow(r.rid)}>
-                  {Icons.close(16)}
-                </button>
-              )}
+              <div className="plan-row-top">
+                <input
+                  className="plan-text"
+                  value={r.text}
+                  placeholder="Текст справи"
+                  onChange={(e) => setText(r.rid, e.target.value)}
+                />
+                {rows.length > 1 && (
+                  <button className="plan-del" aria-label="Прибрати справу" onClick={() => removeRow(r.rid)}>
+                    {Icons.close(16)}
+                  </button>
+                )}
+              </div>
+              <div className="plan-row-opts">
+                <label className="plan-opt">
+                  <span className="plan-opt-label">Кому</span>
+                  <select value={r.assignee} onChange={(e) => setField(r.rid, 'assignee', e.target.value)}>
+                    {ASSIGNEES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                  </select>
+                </label>
+                <label className="plan-opt">
+                  <span className="plan-opt-label">Розділ</span>
+                  <select value={r.category} onChange={(e) => setField(r.rid, 'category', e.target.value)}>
+                    {cats.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  </select>
+                </label>
+                <label className="plan-opt">
+                  <span className="plan-opt-label">Важливість</span>
+                  <select value={r.priority} onChange={(e) => setField(r.rid, 'priority', e.target.value)}>
+                    {prios.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </label>
+              </div>
             </div>
           ))}
         </div>
@@ -666,8 +1009,12 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
 
 /* ---------- шторка задачі: редагування, виконано, видалення ---------- */
 export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
+  const dict = useDictionaries()
   const [text, setText] = useState(t.text)
   const [due, setDue] = useState(t.due || '')
+  const [category, setCategory] = useState(t.category)
+  const [priority, setPriority] = useState(t.priority || 'normal')
+  const [items, setItems] = useState(t.items || [])
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
@@ -677,26 +1024,82 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
     if (edited.current) return
     setText(t.text)
     setDue(t.due || '')
-  }, [t.text, t.due])
-  const changed = text.trim() !== t.text || (due || '') !== (t.due || '')
+    setCategory(t.category)
+    setPriority(t.priority || 'normal')
+    setItems(t.items || [])
+  }, [t.text, t.due, t.category, t.priority, JSON.stringify(t.items || [])])
+
+  // галочку в чеклісті зберігаємо одразу — чекати «Зберегти зміни» тут неприродно
+  const saveItems = async (next) => {
+    edited.current = true
+    setItems(next)
+    try {
+      await patch(`/api/tasks/${t.id}`, {
+        items: next.map(({ kind, text: it, done }) => ({ kind, text: it, done })),
+      })
+    } catch (err) { showToast(err.message, 'warn') }
+  }
+  // розділ можна змінити лише на той, що дозволений цій ролі
+  const catOpts = catOptions(dict)
+  const prioOpts = prioOptions(dict)
+  const changed =
+    text.trim() !== t.text ||
+    (due || '') !== (t.due || '') ||
+    category !== t.category ||
+    priority !== (t.priority || 'normal')
 
   const save = async (extra = {}) => {
     if (busy) return
     setBusy(true)
     try {
-      await patch(`/api/tasks/${t.id}`, { text: text.trim(), due: due || null, ...extra })
+      await patch(`/api/tasks/${t.id}`, {
+        text: text.trim(), due: due || null, category, priority, ...extra,
+      })
       onChanged()
     } catch (err) { showToast(err.message, 'warn') } finally { setBusy(false) }
   }
 
   return (
-    <CenterModal title="Задача" onClose={onClose}>
+    <CenterModal
+      title="Задача"
+      onClose={onClose}
+      footer={(
+        <>
+          <button className="btn-primary" style={{ background: color, opacity: changed && text.trim() ? 1 : 0.45 }}
+            disabled={busy || !changed || !text.trim()} onClick={() => save()}>
+            {busy ? 'Зберігаю…' : 'Зберегти зміни'}
+          </button>
+          {t.status === 'open' ? (
+            <button className="btn-confirm wide" onClick={() => save({ status: 'done' })} disabled={busy}>
+              {Icons.check(18)} Виконано
+            </button>
+          ) : (
+            <button className="btn-small ghost" onClick={() => save({ status: 'open' })} disabled={busy}>
+              {Icons.undo(15)} Повернути в роботу
+            </button>
+          )}
+        </>
+      )}
+    >
       <div className="preview-meta ico-text">
         {t.status === 'done' ? Icons.check(13) : Icons.clock(13)}
-        {t.status === 'done' ? `виконано${t.done_at ? ' · ' + fmtTime(t.done_at) : ''}` : 'в роботі'} · {CAT_LABEL[t.category] || ''}
+        {t.status === 'done' ? `виконано${t.done_at ? ' · ' + fmtTime(t.done_at) : ''}` : 'в роботі'}
+        {findCat(dict, t.category) ? ` · ${findCat(dict, t.category).label}` : ''}
       </div>
       <textarea rows={3} value={text} onChange={(e) => { edited.current = true; setText(e.target.value) }}
         placeholder="Текст задачі" />
+      {t.status !== 'done' && catOpts.length > 1 && (
+        <Field label="Розділ">
+          <Segmented options={catOpts} value={category} color={color}
+            onChange={(v) => { edited.current = true; setCategory(v) }} />
+        </Field>
+      )}
+      {t.status !== 'done' && prioOpts.length > 1 && (
+        <Field label="Важливість">
+          <Segmented options={prioOpts} value={priority} color={color}
+            onChange={(v) => { edited.current = true; setPriority(v) }} />
+        </Field>
+      )}
       {t.status !== 'done' ? (
         <>
           <label className="transcript-hint">Дедлайн (необов'язково)</label>
@@ -707,19 +1110,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
           {Icons.clock(13)} Дедлайн: {t.due.slice(8, 10)}.{t.due.slice(5, 7)}.{t.due.slice(0, 4)}
         </div>
       ))}
-      <button className="btn-primary" style={{ background: color, opacity: changed && text.trim() ? 1 : 0.45 }}
-        disabled={busy || !changed || !text.trim()} onClick={() => save()}>
-        {busy ? 'Зберігаю…' : 'Зберегти зміни'}
-      </button>
-      {t.status === 'open' ? (
-        <button className="btn-confirm wide" onClick={() => save({ status: 'done' })} disabled={busy}>
-          {Icons.check(18)} Виконано
-        </button>
-      ) : (
-        <button className="btn-small ghost" onClick={() => save({ status: 'open' })} disabled={busy}>
-          {Icons.undo(15)} Повернути в роботу
-        </button>
-      )}
+      <TaskItemsEditor items={items} onChange={saveItems} color={color} />
       <button className="btn-small ghost danger" onClick={() => setConfirmDel(true)} disabled={busy}>
         {Icons.trash(15)} Видалити задачу
       </button>
@@ -776,12 +1167,26 @@ export function Sheet({ title, onClose, children, action }) {
   )
 }
 
-/* ---------- віконце по центру екрана (не знизу): підпис-роль у шапці ---------- */
-export function CenterModal({ title, sub, onClose, children }) {
+/* ---------- віконце по центру екрана (не знизу): підпис-роль у шапці ----------
+   `footer` — дії, які лишаються на місці, поки вміст гортається (довгі форми).
+   Escape закриває лише верхнє вікно: коли поверх відкрите ще одне (напр. «Нова
+   підзадача»), нижнє має лишитись. */
+const _modalStack = []
+
+export function CenterModal({ title, sub, onClose, children, footer }) {
+  const self = useRef({})
   useEffect(() => {
-    const h = (e) => e.key === 'Escape' && onClose()
+    const me = self.current
+    _modalStack.push(me)
+    const h = (e) => {
+      if (e.key === 'Escape' && _modalStack[_modalStack.length - 1] === me) onClose()
+    }
     window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
+    return () => {
+      window.removeEventListener('keydown', h)
+      const i = _modalStack.indexOf(me)
+      if (i >= 0) _modalStack.splice(i, 1)
+    }
   }, [onClose])
   useLockScroll()
   return createPortal(
@@ -795,6 +1200,7 @@ export function CenterModal({ title, sub, onClose, children }) {
           <button className="btn-icon" aria-label="Закрити" onClick={onClose}>{Icons.close(20)}</button>
         </div>
         <div className="center-modal-body">{children}</div>
+        {footer && <div className="center-modal-foot">{footer}</div>}
       </div>
     </div>,
     document.body,

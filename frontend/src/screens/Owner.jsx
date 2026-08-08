@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NotificationBell, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, directionLabel, fmtTime, useFeedUnread, useLiveSel, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, byPriority, colorVar, directionLabel, findCat, fmtTime, useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
+import Dictionaries from './Dictionaries'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
@@ -46,12 +47,18 @@ export default function Owner({ me }) {
 
   const back = () => setView(null)
   const drill = (node) => <SwipeBack onBack={back}>{node}</SwipeBack> // свайп уліво → назад
+  // будь-який інший `view` — це ключ власного розділу власниці
+  const drilldown =
+    view === 'settings' ? <Dictionaries onBack={back} /> :
+    view === 'production' ? <Projects onBack={back} /> :
+    view === 'life' ? <Life onBack={back} /> :
+    view === 'logistics' ? <Logistics onBack={back} /> :
+    view === 'risks' ? <Risks onBack={back} /> :
+    view === 'money' ? <Finance onBack={back} /> :
+    view ? <CategoryTasks catKey={view} onBack={back} /> :
+    null
   const screen =
-    view === 'production' ? drill(<Projects onBack={back} />) :
-    view === 'life' ? drill(<Life onBack={back} />) :
-    view === 'logistics' ? drill(<Logistics onBack={back} />) :
-    view === 'risks' ? drill(<Risks onBack={back} />) :
-    view === 'money' ? drill(<Finance onBack={back} />) :
+    drilldown ? drill(drilldown) :
     tab === 'home' ? <Home openView={setView} /> :
     tab === 'flow' ? <Flow /> :
     tab === 'team' ? <Team /> :
@@ -83,6 +90,7 @@ export default function Owner({ me }) {
 /* ---------- Головна (панель) ---------- */
 function Home({ openView }) {
   const [d, setD] = useState(null)
+  const dict = useDictionaries()
   const load = useCallback(() => get('/api/dashboard').then(setD).catch(() => {}), [])
   usePoll(load)
 
@@ -91,22 +99,36 @@ function Home({ openView }) {
   const today = new Date()
   const dateStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}`
 
+  // назва й іконка системних розділів беруться з довідника — перейменування видно тут
+  const cat = (key, fb) => findCat(dict, key) || fb
+  const own = (dict.categories || []).filter((x) => !x.is_system) // власні розділи власниці
+  const byCat = c.by_category || {}
+
   const rows = [
-    { key: 'production', icon: 'film', title: 'Проєкти', value: spravy(c.production_open), cls: s.production === 'ok' ? 'ok' : s.production, view: 'production' },
-    { key: 'life', icon: 'home', title: 'Побут', value: spravy(c.life_open), cls: s.life, view: 'life' },
-    { key: 'logistics', icon: 'pin', title: 'Поїздки', value: poyizdky(c.logistics_open), cls: s.logistics, view: 'logistics' },
-    { key: 'risk', icon: 'alert', title: 'Тривоги', value: aktyvni(c.risk_active), cls: s.risk, view: 'risks' },
+    { key: 'production', ...cat('production', { icon: 'film', label: 'Проєкти' }), value: spravy(c.production_open), cls: s.production === 'ok' ? 'ok' : s.production },
+    { key: 'life', ...cat('life', { icon: 'home', label: 'Побут' }), value: spravy(c.life_open), cls: s.life },
+    { key: 'logistics', ...cat('logistics', { icon: 'pin', label: 'Поїздки' }), value: poyizdky(c.logistics_open), cls: s.logistics },
+    ...own.map((x) => {
+      const n = byCat[x.key] || 0
+      return { key: x.key, icon: x.icon, label: x.label, value: spravy(n), cls: n >= 5 ? 'crit' : n ? 'warn' : 'ok' }
+    }),
+    { key: 'risks', icon: 'alert', label: 'Тривоги', value: aktyvni(c.risk_active), cls: s.risk },
   ]
 
   return (
     <div className="screen">
-      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`} />
+      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`}
+        right={(
+          <button className="btn-icon" aria-label="Розділи та важливість" onClick={() => openView('settings')}>
+            {Icons.gear(20)}
+          </button>
+        )} />
 
       {rows.map((r) => (
-        <button key={r.key} className="status-row" onClick={() => openView(r.view)}>
+        <button key={r.key} className="status-row" onClick={() => openView(r.key)}>
           <span className={`dot ${r.cls}`} />
-          <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons[r.icon](20)}</span>
-          {r.title}
+          <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons[r.icon]?.(20) || Icons.task(20)}</span>
+          {r.label}
           <span className="chev">
             <span className={`value tag ${r.cls}`}>{r.value}</span>
             ›
@@ -452,12 +474,60 @@ function BudgetSheet({ onClose, onSaved }) {
   )
 }
 
+/* ---------- дрілдаун: власний розділ власниці ----------
+   Один екран на будь-який розділ, доданий на сторінці «Розділи та важливість». */
+function CategoryTasks({ catKey, onBack }) {
+  const dict = useDictionaries()
+  const cat = findCat(dict, catKey)
+  const [tasks, setTasks] = useState(null)
+  const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const load = useCallback(
+    () => get(`/api/tasks?category=${encodeURIComponent(catKey)}`).then(setTasks).catch(() => setTasks([])),
+    [catKey],
+  )
+  usePoll(load)
+  useLiveSel(tasks, sel, setSel)
+
+  if (!tasks) return <div className="loading">Завантаження…</div>
+  const color = colorVar(cat?.color)
+  const open = tasks.filter((t) => t.status === 'open')
+  const done = tasks.filter((t) => t.status === 'done')
+  return (
+    <div className="screen">
+      <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>
+      <Header icon={cat?.icon || 'task'} color={color} title={cat?.label || 'Розділ'} sub={spravy(open.length)} />
+      <div className="section-label">Активні</div>
+      {open.length === 0 && <div className="empty">Справ немає</div>}
+      {open.map((t) => (
+        <TaskItem key={t.id} t={t} icon={cat?.icon || 'task'} onOpen={() => setSel(t)} />
+      ))}
+      <button className="btn-dashed" style={{ color }} onClick={() => setAdding(true)}>
+        {Icons.plus(18)} Додати справу
+      </button>
+      {done.length > 0 && <div className="section-label">Зроблено</div>}
+      {done.slice(0, 5).map((t) => (
+        <TaskItem key={t.id} t={t} icon={cat?.icon || 'task'} onOpen={() => setSel(t)} />
+      ))}
+      {adding && (
+        <NewTaskModal defaultCategory={catKey} color={color} title={`Нова справа · ${cat?.label || ''}`}
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
+      )}
+      {sel && (
+        <TaskSheet t={sel} color={color} onClose={() => setSel(null)}
+          onChanged={() => { setSel(null); load() }} />
+      )}
+    </div>
+  )
+}
+
 /* ---------- дрілдаун: Проєкти ---------- */
 function Projects({ onBack }) {
   const [tasks, setTasks] = useState(null)
   const [feed, setFeed] = useState([])
   const [team, setTeam] = useState([])
   const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
   const load = useCallback(() => {
     get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([]))
     get('/api/feed').then((f) => setFeed(f.filter((e) => e.category === 'production'))).catch(() => {})
@@ -476,11 +546,19 @@ function Projects({ onBack }) {
       {open.map((t) => (
         <TaskItem key={t.id} t={t} icon="film" onOpen={() => setSel(t)} />
       ))}
+      <button className="btn-dashed" style={{ color: 'var(--blue)' }} onClick={() => setAdding(true)}>
+        {Icons.plus(18)} Додати задачу
+      </button>
       <div className="section-label">Останнє</div>
       {feed.slice(0, 5).map((e) => <Entry key={e.id} e={e} label={e.role_label?.toUpperCase()} />)}
+      {adding && (
+        <NewTaskModal defaultCategory="production" color="var(--blue)"
+          placeholder="Напр.: підтвердити локацію на чт"
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
+      )}
       {sel && (
-        <TaskSheet t={sel} color="var(--blue)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--blue)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
     </div>
   )
@@ -488,9 +566,11 @@ function Projects({ onBack }) {
 
 /* ---------- дрілдаун: Побут ---------- */
 function Life({ onBack }) {
+  const dict = useDictionaries()
   const [tasks, setTasks] = useState(null)
   const [team, setTeam] = useState([])
   const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
   const load = useCallback(() => {
     Promise.all([
       get('/api/tasks?category=life').catch(() => []),
@@ -501,7 +581,8 @@ function Life({ onBack }) {
   usePoll(load)
   useLiveSel(tasks, sel, setSel) // відкрита задача оновлюється наживо
   if (!tasks) return <div className="loading">Завантаження…</div>
-  const open = tasks.filter((t) => t.status === 'open')
+  // два розділи склеєні в один список → важливі піднімаємо вручну
+  const open = tasks.filter((t) => t.status === 'open').sort(byPriority(dict))
   const done = tasks.filter((t) => t.status === 'done')
   return (
     <div className="screen">
@@ -512,13 +593,21 @@ function Life({ onBack }) {
       {open.map((t) => (
         <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onOpen={() => setSel(t)} />
       ))}
+      <button className="btn-dashed" style={{ color: 'var(--green)' }} onClick={() => setAdding(true)}>
+        {Icons.plus(18)} Додати справу
+      </button>
       {done.length > 0 && <div className="section-label">Зроблено</div>}
       {done.slice(0, 5).map((t) => (
         <TaskItem key={t.id} t={t} icon={t.category === 'dog' ? 'dog' : 'home'} onOpen={() => setSel(t)} />
       ))}
+      {adding && (
+        <NewTaskModal defaultCategory="life" color="var(--green)"
+          title="Нова справа" placeholder="Напр.: записати на хімчистку"
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
+      )}
       {sel && (
-        <TaskSheet t={sel} color="var(--green)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--green)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
     </div>
   )
@@ -529,6 +618,7 @@ function Logistics({ onBack }) {
   const [tasks, setTasks] = useState(null)
   const [team, setTeam] = useState([])
   const [sel, setSel] = useState(null)
+  const [adding, setAdding] = useState(false)
   const load = useCallback(() => {
     get('/api/tasks?category=logistics').then(setTasks).catch(() => setTasks([]))
     get('/api/team').then(setTeam).catch(() => {})
@@ -547,13 +637,21 @@ function Logistics({ onBack }) {
       {open.map((t) => (
         <TaskItem key={t.id} t={t} icon="pin" onOpen={() => setSel(t)} />
       ))}
+      <button className="btn-dashed" style={{ color: 'var(--gold)' }} onClick={() => setAdding(true)}>
+        {Icons.plus(18)} Нова поїздка
+      </button>
       {done.length > 0 && <div className="section-label">Виконані</div>}
       {done.slice(0, 5).map((t) => (
         <TaskItem key={t.id} t={t} icon="pin" onOpen={() => setSel(t)} />
       ))}
+      {adding && (
+        <NewTaskModal defaultCategory="logistics" color="var(--gold)"
+          title="Нова поїздка" placeholder="Напр.: забрати оператора о 9:00"
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
+      )}
       {sel && (
-        <TaskSheet t={sel} color="var(--gold)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--gold)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
     </div>
   )
@@ -616,7 +714,9 @@ function TaskItem({ t, icon, onOpen }) {
     <button className={`item ${t.status === 'done' ? 'done' : ''}`} onClick={onOpen}>
       <span className={`dot ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`} />
       <span className="ico">{Icons[icon]?.(19)}</span>
+      {t.status !== 'done' && <PriorityMark p={t.priority} />}
       <span className="grow">{t.text}</span>
+      <ItemsBadge t={t} />
       <span className={`tag ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`}>
         {t.status === 'done' ? (t.done_at ? fmtTime(t.done_at) : 'готово') : overdue ? 'терміново' : t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}
       </span>

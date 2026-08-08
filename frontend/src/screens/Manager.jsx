@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, Entry, Header, Icons, NotificationBell, TabBar, TaskSheet, directionLabel, fmtTime, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, Entry, Header, Icons, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, directionLabel, fmtTime, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -10,7 +10,7 @@ export default function Manager({ me }) {
       <div className="app-scroll">
         {tab === 'project' && <Project me={me} />}
         {tab === 'risks' && <Risks />}
-        {tab === 'tasks' && <Tasks />}
+        {tab === 'tasks' && <Tasks me={me} />}
       </div>
       <TabBar
         tabs={[
@@ -102,24 +102,13 @@ function Risks() {
   )
 }
 
-function Tasks() {
+function Tasks({ me }) {
   const [tasks, setTasks] = useState(null)
   const [sel, setSel] = useState(null)
   const [adding, setAdding] = useState(false)
-  const [text, setText] = useState('')
-  const [toast, showToast] = useToast()
   const load = useCallback(() => get('/api/tasks?category=production').then(setTasks).catch(() => setTasks([])), [])
   usePoll(load)
   useLiveSel(tasks, sel, setSel) // відкрита задача оновлюється наживо
-
-  const add = async () => {
-    if (!text.trim()) return
-    try {
-      await post('/api/tasks', { category: 'production', text: text.trim() })
-      setAdding(false); setText('')
-      load()
-    } catch (e) { showToast(e.message, 'warn') }
-  }
 
   if (!tasks) return <div className="loading">Завантаження…</div>
   const open = tasks.filter((t) => t.status === 'open')
@@ -132,7 +121,9 @@ function Tasks() {
         <button key={t.id} className="item" onClick={() => setSel(t)}>
           <span className="dot warn" />
           <span className="ico">{Icons.film(19)}</span>
+          <PriorityMark p={t.priority} />
           <span className="grow">{t.text}</span>
+          <ItemsBadge t={t} />
           {t.due && <span className="tag warn">до {t.due.slice(5)}</span>}
           <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
@@ -151,18 +142,14 @@ function Tasks() {
         </button>
       ))}
       {adding && (
-        <CenterModal title="Нова задача" onClose={() => setAdding(false)}>
-          <input placeholder="Напр.: підтвердити локацію на чт" value={text}
-            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-          <button className="btn-primary" style={{ background: 'var(--blue)', opacity: text.trim() ? 1 : 0.45 }}
-            disabled={!text.trim()} onClick={add}>Зберегти</button>
-        </CenterModal>
+        <NewTaskModal defaultCategory="production" color="var(--blue)"
+          placeholder="Напр.: підтвердити локацію на чт"
+          onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />
       )}
       {sel && (
-        <TaskSheet t={sel} color="var(--blue)" onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
+        <TaskSheet t={sel} color="var(--blue)"
+          onClose={() => setSel(null)} onChanged={() => { setSel(null); load() }} />
       )}
-      {toast}
     </div>
   )
 }

@@ -8,7 +8,9 @@ import logging
 from sqlalchemy import func, select
 
 from ..db import SessionMaker
-from ..models import BudgetItem, Expense, Message, Risk, Task, User
+from ..models import (
+    BudgetItem, Expense, Message, Risk, Task, TaskCategory, TaskItem, TaskPriority, User,
+)
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +63,16 @@ async def _fingerprint(session) -> str:
         await scalar(select(func.coalesce(func.sum(BudgetItem.amount), 0))),
         await scalar(select(func.count()).select_from(User)),
         await scalar(select(func.max(User.id))),
+        # довідники: додали/видалили/перейменували розділ чи рівень важливості
+        await scalar(select(func.count()).select_from(TaskCategory)),
+        await scalar(select(func.coalesce(func.sum(func.length(TaskCategory.label)), 0))),
+        await scalar(select(func.count()).select_from(TaskPriority)),
+        await scalar(select(func.coalesce(func.sum(func.length(TaskPriority.label)), 0))),
+        await scalar(select(func.coalesce(func.sum(TaskPriority.rank), 0))),
+        # підзадачі й чекліст: додали пункт, перейменували чи поставили галочку
+        await scalar(select(func.count()).select_from(TaskItem)),
+        await scalar(select(func.count()).select_from(TaskItem).where(TaskItem.done.is_(True))),
+        await scalar(select(func.coalesce(func.sum(func.length(TaskItem.text)), 0))),
     ]
     return "-".join(str(p) for p in parts)
 
