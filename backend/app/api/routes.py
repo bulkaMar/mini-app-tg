@@ -26,6 +26,8 @@ from ..services.dictionaries import (
 from ..services.notify import route_notifications
 from ..services.saver import (
     parse_due,
+    parse_due_at,
+    due_out,
     resolve_assignee_category,
     resolve_target_role,
     save_classified,
@@ -493,7 +495,7 @@ async def list_tasks(
             "status": t.status,
             "priority": t.priority or "normal",
             "owner_role": t.owner_role,
-            "due": t.due.isoformat() if t.due else None,
+            "due": due_out(t),
             "done_at": t.done_at.isoformat() if t.done_at else None,
             "time": t.created_at.isoformat() if t.created_at else None,
             "items": its,
@@ -511,6 +513,7 @@ async def create_task(
 ) -> dict:
     await _check_task_category(session, user, body.category)
     prios = await priority_keys(session, user.workspace_id)
+    due_at, time_set = parse_due_at(body.due)
     task = Task(
         workspace_id=user.workspace_id,
         telegram_id=user.telegram_id,
@@ -519,6 +522,8 @@ async def create_task(
         owner_role=user.role,
         priority=body.priority if body.priority in prios else await default_priority_key(session, user.workspace_id),
         due=parse_due(body.due),
+        due_at=due_at,
+        due_time_set=time_set,
     )
     session.add(task)
     await session.flush()  # потрібен id, щоб прив'язати підзадачі/чекліст
@@ -549,6 +554,7 @@ async def update_task(
         task.text = body["text"].strip()
     if "due" in body:
         task.due = parse_due(body["due"])
+        task.due_at, task.due_time_set = parse_due_at(body["due"])
     if body.get("category") and body["category"] != task.category:
         await _check_task_category(session, user, body["category"])
         task.category = body["category"]

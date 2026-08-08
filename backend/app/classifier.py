@@ -34,7 +34,7 @@ class Classification(BaseModel):
     amount: float | None = None
     currency: str | None = None
     risk_level: Literal["low", "med", "high"] | None = None
-    due: str | None = None  # ISO-дата, якщо є дедлайн
+    due: str | None = None  # ISO-дата, за потреби з часом: YYYY-MM-DD[THH:MM]
     owner: Literal["me", "manager", "assistant", "driver"] | None = None
     keyword_hit: bool = False  # заповнюється сервісом, не моделлю
 
@@ -48,7 +48,8 @@ SYSTEM_PROMPT = """Ти — диспетчер продакшн-команди. 
 - text: чисте коротке формулювання без води та слів-паразитів, мовою оригіналу
 - amount + currency: тільки якщо в тексті є сума грошей (за замовчуванням UAH)
 - risk_level: тільки для type=risk (low/med/high за серйозністю)
-- due: ISO-дата YYYY-MM-DD, тільки якщо є явний дедлайн
+- due: тільки якщо є явний дедлайн. YYYY-MM-DD, а якщо названо й час — \
+YYYY-MM-DDTHH:MM (напр. «завтра о 14:00»). Часу не вигадуй: немає в тексті — лише дата
 - owner: кому це стосується (me/manager/assistant/driver), тільки якщо ясно з тексту
 - type=money завжди category=finance"""
 

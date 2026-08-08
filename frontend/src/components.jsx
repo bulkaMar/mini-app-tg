@@ -162,6 +162,70 @@ export function fmtTime(iso) {
   return `${dd}.${mm}.${d.getFullYear()} ${time}`
 }
 
+/* ---------- дедлайн: дата + необовʼязковий час ----------
+   З сервера приходить рядком: «2026-08-10» (на весь день) або «2026-08-10T14:30».
+   Розбираємо вручну, бо new Date('2026-08-10') у JS — це опівніч за Гринвічем,
+   а не за нашим часом: без цього дедлайн «протухав» на кілька годин раніше. */
+const p2 = (n) => String(n).padStart(2, '0')
+
+export function parseDue(due) {
+  if (!due) return null
+  const [d, t = ''] = String(due).split('T')
+  const [y, m, day] = d.split('-').map(Number)
+  if (!y || !m || !day) return null
+  const [hh, mm] = t.split(':').map(Number)
+  const hasTime = Number.isFinite(hh) && Number.isFinite(mm)
+  return { y, m, day, hh: hasTime ? hh : null, mm: hasTime ? mm : null }
+}
+
+/* момент, після якого дедлайн вважається пропущеним:
+   заданий час — саме він; без часу — кінець того дня */
+export function dueMoment(due) {
+  const p = parseDue(due)
+  if (!p) return null
+  return p.hh === null
+    ? new Date(p.y, p.m - 1, p.day, 23, 59, 59)
+    : new Date(p.y, p.m - 1, p.day, p.hh, p.mm)
+}
+export const isOverdue = (due) => { const m = dueMoment(due); return !!m && m <= new Date() }
+
+export function fmtDue(due) {          // коротко для плашки: «10.08» / «10.08 14:30»
+  const p = parseDue(due)
+  if (!p) return ''
+  const d = `${p2(p.day)}.${p2(p.m)}`
+  return p.hh === null ? d : `${d} ${p2(p.hh)}:${p2(p.mm)}`
+}
+export function fmtDueLong(due) {      // повністю: «10.08.2026» / «10.08.2026, 14:30»
+  const p = parseDue(due)
+  if (!p) return ''
+  const d = `${p2(p.day)}.${p2(p.m)}.${p.y}`
+  return p.hh === null ? d : `${d}, ${p2(p.hh)}:${p2(p.mm)}`
+}
+
+// розкладання/збирання для полів вводу
+export const dueDatePart = (due) => (due ? String(due).split('T')[0] : '')
+export const dueTimePart = (due) => (String(due || '').split('T')[1] || '').slice(0, 5)
+export const joinDue = (date, timeStr) => (date ? (timeStr ? `${date}T${timeStr}` : date) : null)
+
+/* поле дедлайну: дата + час. Порожній час = «на весь день». */
+export function DueField({ date, time, onChange, label = "Дедлайн (необов'язково)" }) {
+  const setDate = (v) => onChange(v, v ? time : '') // прибрали дату — час теж зайвий
+  return (
+    <Field label={label}>
+      <div className="due-row">
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input type="time" value={time} disabled={!date} step="300"
+          onChange={(e) => onChange(date, e.target.value)} />
+        {time && (
+          <button type="button" className="btn-icon" aria-label="Прибрати час"
+            onClick={() => onChange(date, '')}>{Icons.close(16)}</button>
+        )}
+      </div>
+      {date && !time && <div className="due-hint">Без часу — на весь день</div>}
+    </Field>
+  )
+}
+
 /* ---------- спільні блоки ---------- */
 
 export function Header({ icon, color, title, sub, right }) {
@@ -588,7 +652,8 @@ export function NewTaskModal({
   const [text, setText] = useState('')
   const [category, setCategory] = useState(defaultCategory || '')
   const [priority, setPriority] = useState('')
-  const [due, setDue] = useState('')
+  const [due, setDue] = useState('')      // «2026-08-10»
+  const [dueTime, setDueTime] = useState('') // «14:30» або порожньо = на весь день
   const [items, setItems] = useState([]) // підзадачі й чекліст — поки задачі немає, тримаємо тут
   const [busy, setBusy] = useState(false)
   const [toast, showToast] = useToast()
@@ -607,7 +672,9 @@ export function NewTaskModal({
     if (!valid || busy) return
     setBusy(true)
     try {
-      await post('/api/tasks', { text: text.trim(), category, priority, due: due || null, items })
+      await post('/api/tasks', {
+        text: text.trim(), category, priority, due: joinDue(due, dueTime), items,
+      })
       haptic('medium')
       onSaved()
     } catch (e) { showToast(e.message, 'warn'); setBusy(false) }
@@ -637,9 +704,7 @@ export function NewTaskModal({
           <Segmented options={prios} value={priority} onChange={setPriority} color={color} />
         </Field>
       )}
-      <Field label="Дедлайн (необов'язково)">
-        <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-      </Field>
+      <DueField date={due} time={dueTime} onChange={(d, t) => { setDue(d); setDueTime(t) }} />
       <TaskItemsEditor items={items} onChange={setItems} color={color} />
       {toast}
     </CenterModal>
@@ -1011,7 +1076,8 @@ export function ExpenseSheet({ e, canApprove, color = 'var(--orange)', onClose, 
 export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
   const dict = useDictionaries()
   const [text, setText] = useState(t.text)
-  const [due, setDue] = useState(t.due || '')
+  const [due, setDue] = useState(dueDatePart(t.due))
+  const [dueTime, setDueTime] = useState(dueTimePart(t.due))
   const [category, setCategory] = useState(t.category)
   const [priority, setPriority] = useState(t.priority || 'normal')
   const [items, setItems] = useState(t.items || [])
@@ -1023,7 +1089,8 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
   useEffect(() => {
     if (edited.current) return
     setText(t.text)
-    setDue(t.due || '')
+    setDue(dueDatePart(t.due))
+    setDueTime(dueTimePart(t.due))
     setCategory(t.category)
     setPriority(t.priority || 'normal')
     setItems(t.items || [])
@@ -1044,7 +1111,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
   const prioOpts = prioOptions(dict)
   const changed =
     text.trim() !== t.text ||
-    (due || '') !== (t.due || '') ||
+    joinDue(due, dueTime) !== (t.due || null) ||
     category !== t.category ||
     priority !== (t.priority || 'normal')
 
@@ -1053,7 +1120,7 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
     setBusy(true)
     try {
       await patch(`/api/tasks/${t.id}`, {
-        text: text.trim(), due: due || null, category, priority, ...extra,
+        text: text.trim(), due: joinDue(due, dueTime), category, priority, ...extra,
       })
       onChanged()
     } catch (err) { showToast(err.message, 'warn') } finally { setBusy(false) }
@@ -1101,13 +1168,11 @@ export function TaskSheet({ t, color = 'var(--orange)', onClose, onChanged }) {
         </Field>
       )}
       {t.status !== 'done' ? (
-        <>
-          <label className="transcript-hint">Дедлайн (необов'язково)</label>
-          <input type="date" value={due} onChange={(e) => { edited.current = true; setDue(e.target.value) }} />
-        </>
+        <DueField date={due} time={dueTime}
+          onChange={(d, tm) => { edited.current = true; setDue(d); setDueTime(tm) }} />
       ) : (t.due && (
         <div className="preview-meta ico-text">
-          {Icons.clock(13)} Дедлайн: {t.due.slice(8, 10)}.{t.due.slice(5, 7)}.{t.due.slice(0, 4)}
+          {Icons.clock(13)} Дедлайн: {fmtDueLong(t.due)}
         </div>
       ))}
       <TaskItemsEditor items={items} onChange={saveItems} color={color} />

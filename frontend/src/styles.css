@@ -183,6 +183,17 @@ html, body {
 .prio { display: flex; align-items: center; flex-shrink: 0; }
 .prio-dot { width: 9px; height: 9px; border-radius: 50%; display: block; }
 
+/* ---------- дедлайн: дата + час ---------- */
+.due-row { display: flex; gap: 8px; align-items: center; }
+.due-row input[type="date"] { flex: 1 1 58%; min-width: 0; }
+.due-row input[type="time"] { flex: 1 1 42%; min-width: 0; }
+.due-row input[type="time"]:disabled { opacity: 0.45; }
+/* iOS робить нативні поля дати/часу високими й центрованими — прибираємо */
+.due-row input[type="date"], .due-row input[type="time"] {
+  -webkit-appearance: none; appearance: none; text-align: left;
+}
+.due-hint { font-size: 12.5px; color: var(--muted); padding-left: 2px; }
+
 /* ---------- підзадачі та чекліст усередині задачі ---------- */
 .ti-row { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
 .ti-tick {

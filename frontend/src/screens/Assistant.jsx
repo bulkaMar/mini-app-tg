@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -59,7 +59,7 @@ function Life({ me, category }) {
           <PriorityMark p={t.priority} />
           <span className="grow">{t.text}</span>
           <ItemsBadge t={t} />
-          <span className="tag warn">{t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}</span>
+          <span className={`tag ${isOverdue(t.due) ? 'crit' : 'warn'}`}>{t.due ? `до ${fmtDue(t.due)}` : 'сьогодні'}</span>
           <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
       ))}

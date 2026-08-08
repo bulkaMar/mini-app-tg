@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, Entry, Header, Icons, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, directionLabel, fmtTime, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, Entry, Header, Icons, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, directionLabel, fmtDue, fmtTime, isOverdue, useLiveSel, usePoll, useToast } from '../components'
 
 export default function Manager({ me }) {
   const [tab, setTab] = useState('project')
@@ -124,7 +124,7 @@ function Tasks({ me }) {
           <PriorityMark p={t.priority} />
           <span className="grow">{t.text}</span>
           <ItemsBadge t={t} />
-          {t.due && <span className="tag warn">до {t.due.slice(5)}</span>}
+          {t.due && <span className={`tag ${isOverdue(t.due) ? 'crit' : 'warn'}`}>до {fmtDue(t.due)}</span>}
           <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
         </button>
       ))}

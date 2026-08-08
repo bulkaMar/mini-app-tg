@@ -66,7 +66,12 @@ class Task(Base):
     # На старих записах може бути NULL — читаємо як "normal".
     priority: Mapped[str] = mapped_column(String(10), default="normal")
     owner_role: Mapped[str] = mapped_column(String(20))  # кому доручено (роль виконавця)
-    due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due: Mapped[date | None] = mapped_column(Date, nullable=True)  # legacy: лишився для міграції
+    # дедлайн із часом. Зберігаємо «настінний» час без часової зони: команда в одному
+    # поясі, тож перетворення тільки заплутали б. due_time_set розрізняє
+    # «10 серпня о 14:30» і «10 серпня, будь-коли за день».
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    due_time_set: Mapped[bool] = mapped_column(Boolean, default=False)
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # коли виконано
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # автоматично оновлюється при будь-якій правці → SSE бачить зміну тексту/дедлайну наживо

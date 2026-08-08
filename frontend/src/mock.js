@@ -53,7 +53,7 @@ export const MOCK = {
     { id: 2, category: 'dog', text: 'Ветеринар — дивно їсть', status: 'open', priority: 'urgent', owner_role: 'assistant', due: '2026-06-11', time: '2026-06-10T09:12:00', items: [], items_total: 0, items_done: 0 },
     {
       id: 4, category: 'production', text: 'Реклама Y — дедлайн чт', status: 'open', priority: 'high',
-      owner_role: 'manager', due: '2026-06-12', time: '2026-06-09T15:00:00',
+      owner_role: 'manager', due: '2026-06-12T14:30', time: '2026-06-09T15:00:00',
       items: [
         { id: 1, kind: 'subtask', text: 'Затвердити сценарій', done: true },
         { id: 2, kind: 'subtask', text: 'Знайти локацію', done: false },

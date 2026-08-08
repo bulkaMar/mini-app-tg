@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, time
 
 from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -32,6 +33,8 @@ _ADD_COLUMNS = [
     ("tasks", "updated_at", "TIMESTAMP"),
     ("expenses", "updated_at", "TIMESTAMP"),
     ("tasks", "priority", "VARCHAR(10)"),
+    ("tasks", "due_at", "TIMESTAMP"),
+    ("tasks", "due_time_set", "BOOLEAN"),
     # workspaces (мультитенантність): кожна таблиця даних отримує workspace_id
     ("users", "workspace_id", "INTEGER"),
     ("messages", "workspace_id", "INTEGER"),
@@ -83,6 +86,24 @@ async def _backfill_workspaces() -> None:
         logging.warning("DB migrate → backfilled %s orphan rows into workspace %s", orphan, ws.id)
 
 
+async def _backfill_due_at() -> None:
+    """Старі дедлайни (тільки дата) переносимо в due_at як «на весь день»."""
+    try:
+        async with SessionMaker() as session:
+            rows = (await session.execute(
+                select(Task).where(Task.due.is_not(None), Task.due_at.is_(None))
+            )).scalars().all()
+            if not rows:
+                return
+            for t in rows:
+                t.due_at = datetime.combine(t.due, time(0, 0))
+                t.due_time_set = False
+            await session.commit()
+            logging.warning("DB migrate → %s дедлайнів перенесено в due_at", len(rows))
+    except Exception:
+        logging.warning("DB migrate skip due_at backfill")
+
+
 async def _seed_existing_workspaces() -> None:
     """Кожен простір має власні розділи й рівні важливості. Наповнюємо ті,
     де їх ще немає (простори, створені до появи довідників). Ідемпотентно:
@@ -118,5 +139,6 @@ async def init_db() -> None:
             logging.warning("DB migrate skip %s.%s (вже існує?)", table, column)
 
     await _backfill_workspaces()
+    await _backfill_due_at()
     await _seed_existing_workspaces()
     logging.warning("DB tables ensured (create_all + workspace migration done)")

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, byPriority, colorVar, directionLabel, findCat, fmtTime, useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, byPriority, colorVar, fmtDue, isOverdue, directionLabel, findCat, fmtTime, useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
 import Dictionaries from './Dictionaries'
 
@@ -709,7 +709,7 @@ function Risks({ onBack }) {
 
 /* ---------- спільне для задач ---------- */
 function TaskItem({ t, icon, onOpen }) {
-  const overdue = t.due && new Date(t.due) <= new Date()
+  const overdue = isOverdue(t.due)
   return (
     <button className={`item ${t.status === 'done' ? 'done' : ''}`} onClick={onOpen}>
       <span className={`dot ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`} />
@@ -718,7 +718,7 @@ function TaskItem({ t, icon, onOpen }) {
       <span className="grow">{t.text}</span>
       <ItemsBadge t={t} />
       <span className={`tag ${t.status === 'done' ? 'ok' : overdue ? 'crit' : 'warn'}`}>
-        {t.status === 'done' ? (t.done_at ? fmtTime(t.done_at) : 'готово') : overdue ? 'терміново' : t.due ? `до ${t.due.slice(5)}` : 'сьогодні'}
+        {t.status === 'done' ? (t.done_at ? fmtTime(t.done_at) : 'готово') : overdue ? 'терміново' : t.due ? `до ${fmtDue(t.due)}` : 'сьогодні'}
       </span>
       <span className="ico" style={{ color: 'var(--muted)' }}>{Icons.pencil(15)}</span>
     </button>

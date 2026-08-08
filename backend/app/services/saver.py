@@ -1,6 +1,6 @@
 """Спільне збереження класифікованого запису — використовують і бот, і API."""
 
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, time as time_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,12 +9,45 @@ from ..models import Expense, Message, Risk, Task, User
 
 
 def parse_due(due: str | None) -> date_type | None:
+    """Тільки дата — для legacy-стовпця `due`."""
     if not due:
         return None
     try:
-        return datetime.strptime(due[:10], "%Y-%m-%d").date()
+        return datetime.strptime(str(due)[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def parse_due_at(due: str | None) -> tuple[datetime | None, bool]:
+    """Приймає «2026-08-10» або «2026-08-10T14:30» (також із секундами).
+
+    Повертає (момент, чи заданий час). Без часу дедлайн вважається «на весь
+    день» — момент ставимо на 00:00, а `False` каже показувати лише дату.
+    Час зберігаємо як настінний, без часової зони (уся команда в одному поясі).
+    """
+    if not due:
+        return None, False
+    s = str(due).strip().replace(" ", "T")
+    day = parse_due(s)
+    if day is None:
+        return None, False
+    rest = s[11:16]  # «HH:MM» після дати, якщо він є
+    if len(rest) == 5 and rest[2] == ":":
+        try:
+            hh, mm = int(rest[:2]), int(rest[3:])
+            if 0 <= hh <= 23 and 0 <= mm <= 59:
+                return datetime.combine(day, time_type(hh, mm)), True
+        except ValueError:
+            pass
+    return datetime.combine(day, time_type(0, 0)), False
+
+
+def due_out(task) -> str | None:
+    """Дедлайн для фронта: «2026-08-10» або «2026-08-10T14:30»."""
+    at = task.due_at
+    if at is None:
+        return task.due.isoformat() if task.due else None
+    return at.strftime("%Y-%m-%dT%H:%M") if task.due_time_set else at.strftime("%Y-%m-%d")
 
 
 # базові розділи задач (finance — не задача, а витрата). Це лише те, що вміє
@@ -84,6 +117,7 @@ async def save_classified(
         await session.flush()
         record_id = expense.id
     elif c.type == "task":
+        _due_at, _time_set = parse_due_at(c.due)
         task = Task(
             workspace_id=user.workspace_id,
             telegram_id=user.telegram_id,
@@ -91,6 +125,8 @@ async def save_classified(
             text=c.text,
             owner_role=user.role,
             due=parse_due(c.due),
+            due_at=_due_at,
+            due_time_set=_time_set,
         )
         session.add(task)
         await session.flush()
