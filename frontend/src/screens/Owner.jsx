@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NoSheets, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
   useSheetSelection, useSheets, Field, Segmented, directionLabel, findCat, fmtTime,
   useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
@@ -391,7 +391,7 @@ function Finance({ onBack }) {
   const [text, setText] = useState('')
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
-  const [sheet, setSheet, sheets] = useSheetSelection()
+  const [sheet, setSheet, sheets, noSheets] = useSheetSelection()
   const allSheets = sheet === ALL_SHEETS
 
   const load = useCallback(() => {
@@ -420,6 +420,7 @@ function Finance({ onBack }) {
     try { await post(`/api/money/${id}/approve`); load() } catch (e) { showToast(e.message, 'warn') }
   }
 
+  if (noSheets) return <NoSheets onBack={onBack} />
   if (!m) return <div className="loading">Завантаження…</div>
   const monthName = new Date().toLocaleDateString('uk-UA', { month: 'long' })
 

@@ -89,7 +89,7 @@ export function useDictionaries() {
 export const refreshDictionaries = loadDictionaries
 
 /* ---------- листи витрат: той самий спільний кеш, що й для довідників ---------- */
-let _sheets = { sheets: [], can_manage: false }
+let _sheets = { sheets: [], can_manage: false, loaded: false }
 let _sheetsLoaded = false
 const _sheetSubs = new Set()
 
@@ -97,10 +97,15 @@ async function loadSheets() {
   try {
     const d = await get('/api/finance/sheets')
     if (!d || !Array.isArray(d.sheets)) return
-    _sheets = d
+    _sheets = { ...d, loaded: true }
     _sheetsLoaded = true
-    _sheetSubs.forEach((fn) => { try { fn(d) } catch { /* ok */ } })
-  } catch { /* бек недоступний — лишається порожній список */ }
+  } catch {
+    // бек недоступний — теж вважаємо «відповідь отримано», інакше екран
+    // фінансів завис би на «Завантаження…» назавжди
+    _sheets = { ..._sheets, loaded: true }
+    _sheetsLoaded = true
+  }
+  _sheetSubs.forEach((fn) => { try { fn(_sheets) } catch { /* ok */ } })
 }
 
 export function useSheets() {
@@ -476,6 +481,9 @@ export function useToast() {
 export function usePoll(fn, ms = 30000) {
   const ref = useRef(fn)
   ref.current = fn
+  // Залежність саме від `fn`: коли запит змінюється (обрали інший лист витрат —
+  // і load перестворюється), треба перезавантажити одразу, а не чекати наступного
+  // тику. Усі виклики загорнуті в useCallback, тож зайвих перезапусків немає.
   useEffect(() => {
     const run = () => ref.current()
     run() // первинне завантаження
@@ -493,7 +501,7 @@ export function usePoll(fn, ms = 30000) {
       window.removeEventListener('pageshow', refresh)
       document.removeEventListener('visibilitychange', refresh)
     }
-  }, [ms])
+  }, [ms, fn])
 }
 
 /* ---------- тримає відкрите вікно в актуальному стані ----------
@@ -573,9 +581,11 @@ export function SheetPicker({ value, onChange, onManage }) {
   )
 }
 
-/* обирає лист за замовчуванням («Загальний бюджет»), коли список приїхав */
+/* обирає лист за замовчуванням («Загальний бюджет»), коли список приїхав.
+   `noSheets` — список уже отримано і він порожній: людині не відкрито жодного
+   листа, показувати треба пояснення, а не вічне «Завантаження…». */
 export function useSheetSelection() {
-  const { sheets } = useSheets()
+  const { sheets, loaded } = useSheets()
   const [sheet, setSheet] = useState('')
   useEffect(() => {
     if (!sheets.length) return
@@ -583,7 +593,18 @@ export function useSheetSelection() {
     const general = sheets.find((s) => s.is_general) || sheets[0]
     setSheet(String(general.id))
   }, [sheets]) // eslint-disable-line react-hooks/exhaustive-deps
-  return [sheet, setSheet, sheets]
+  return [sheet, setSheet, sheets, loaded && !sheets.length]
+}
+
+/* заглушка для екрана фінансів, коли листів немає зовсім */
+export function NoSheets({ onBack }) {
+  return (
+    <div className="screen">
+      {onBack && <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>}
+      <Header icon="wallet" color="var(--muted)" title="Фінанси" sub="немає доступу" />
+      <div className="empty">Вам не відкрито жодного листа витрат.<br />Попросіть власницю дати доступ.</div>
+    </div>
+  )
 }
 
 /* ---------- керування листами: додати / перейменувати / видалити ---------- */

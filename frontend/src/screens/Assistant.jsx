@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
-import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
+import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -93,7 +93,7 @@ function Money() {
   const [text, setText] = useState('')
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
-  const [sheet, setSheet, sheets] = useSheetSelection()
+  const [sheet, setSheet, sheets, noSheets] = useSheetSelection()
   const load = useCallback(() => {
     if (!sheet) return
     get(`/api/money?sheet=${sheet}`).then(setM).catch(() => {})
@@ -113,6 +113,7 @@ function Money() {
     } catch (e) { showToast(e.message, 'warn') }
   }
 
+  if (noSheets) return <NoSheets />
   if (!m) return <div className="loading">Завантаження…</div>
   return (
     <div className="screen">
