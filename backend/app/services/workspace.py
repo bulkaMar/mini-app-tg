@@ -4,6 +4,7 @@ from sqlalchemy import select
 
 from ..models import Workspace
 from .dictionaries import seed_dictionaries
+from .finance import seed_general_sheet
 
 
 async def get_or_create_workspace(session, owner_tg_id: int) -> Workspace:
@@ -14,6 +15,8 @@ async def get_or_create_workspace(session, owner_tg_id: int) -> Workspace:
         ws = Workspace(owner_telegram_id=owner_tg_id)
         session.add(ws)
         await session.flush()
-    # новий простір одразу отримує свої розділи й рівні важливості (ідемпотентно)
+    # новий простір одразу отримує свої розділи, рівні важливості
+    # і «Загальний бюджет» (усе ідемпотентно)
     await seed_dictionaries(session, ws.id)
+    await seed_general_sheet(session, ws.id)
     return ws

@@ -11,6 +11,7 @@ from .models import (
     DailySnapshot,
     Expense,
     Message,
+    ExpenseSheet,
     Risk,
     Task,
     TaskItem,
@@ -35,6 +36,11 @@ _ADD_COLUMNS = [
     ("tasks", "priority", "VARCHAR(10)"),
     ("tasks", "due_at", "TIMESTAMP"),
     ("tasks", "due_time_set", "BOOLEAN"),
+    # листи витрат + тип зайнятості
+    ("expenses", "sheet_id", "INTEGER"),
+    ("budget_items", "sheet_id", "INTEGER"),
+    ("users", "employment", "VARCHAR(10)"),
+    ("users", "visible_from", "TIMESTAMP"),
     # workspaces (мультитенантність): кожна таблиця даних отримує workspace_id
     ("users", "workspace_id", "INTEGER"),
     ("messages", "workspace_id", "INTEGER"),
@@ -104,6 +110,30 @@ async def _backfill_due_at() -> None:
         logging.warning("DB migrate skip due_at backfill")
 
 
+async def _backfill_sheets() -> None:
+    """Наявні витрати й секції бюджету кладемо в «Загальний бюджет» свого простору."""
+    from .services.finance import seed_general_sheet
+
+    try:
+        async with SessionMaker() as session:
+            ws_ids = (await session.execute(select(Workspace.id))).scalars().all()
+            moved = 0
+            for ws_id in ws_ids:
+                sheet = await seed_general_sheet(session, ws_id)
+                for model in (Expense, BudgetItem):
+                    res = await session.execute(
+                        update(model)
+                        .where(model.workspace_id == ws_id, model.sheet_id.is_(None))
+                        .values(sheet_id=sheet.id)
+                    )
+                    moved += res.rowcount or 0
+            await session.commit()
+            if moved:
+                logging.warning("DB migrate -> %s записів у «Загальний бюджет»", moved)
+    except Exception:
+        logging.warning("DB migrate skip sheets backfill")
+
+
 async def _seed_existing_workspaces() -> None:
     """Кожен простір має власні розділи й рівні важливості. Наповнюємо ті,
     де їх ще немає (простори, створені до появи довідників). Ідемпотентно:
@@ -140,5 +170,6 @@ async def init_db() -> None:
 
     await _backfill_workspaces()
     await _backfill_due_at()
+    await _backfill_sheets()
     await _seed_existing_workspaces()
     logging.warning("DB tables ensured (create_all + workspace migration done)")

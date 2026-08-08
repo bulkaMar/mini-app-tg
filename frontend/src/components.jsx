@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { get, patch, post } from './api'
+import { del, get, patch, post } from './api'
 import { haptic } from './telegram'
 import { onLiveChange } from './live'
 
@@ -87,6 +87,33 @@ export function useDictionaries() {
   return d
 }
 export const refreshDictionaries = loadDictionaries
+
+/* ---------- листи витрат: той самий спільний кеш, що й для довідників ---------- */
+let _sheets = { sheets: [], can_manage: false }
+let _sheetsLoaded = false
+const _sheetSubs = new Set()
+
+async function loadSheets() {
+  try {
+    const d = await get('/api/finance/sheets')
+    if (!d || !Array.isArray(d.sheets)) return
+    _sheets = d
+    _sheetsLoaded = true
+    _sheetSubs.forEach((fn) => { try { fn(d) } catch { /* ok */ } })
+  } catch { /* бек недоступний — лишається порожній список */ }
+}
+
+export function useSheets() {
+  const [d, setD] = useState(_sheets)
+  useEffect(() => {
+    _sheetSubs.add(setD)
+    if (!_sheetsLoaded) loadSheets()
+    const off = onLiveChange(loadSheets)
+    return () => { _sheetSubs.delete(setD); off() }
+  }, [])
+  return d
+}
+export const refreshSheets = loadSheets
 
 export const findCat = (dict, key) => dict?.categories?.find((c) => c.key === key)
 export const findPrio = (dict, key) => dict?.priorities?.find((p) => p.key === key)
@@ -520,6 +547,158 @@ export function Segmented({ options, value, onChange, color = 'var(--orange)' })
         )
       })}
     </div>
+  )
+}
+
+/* ---------- вибір листа витрат ----------
+   «Усі листи» зʼявляється лише коли листів більше одного. */
+export const ALL_SHEETS = 'all'
+
+export function SheetPicker({ value, onChange, onManage }) {
+  const { sheets, can_manage } = useSheets()
+  if (!sheets.length) return null
+  return (
+    <div className="sheet-picker">
+      <span className="ico">{Icons.wallet(18)}</span>
+      <select value={value || ''} onChange={(e) => { haptic(); onChange(e.target.value) }}>
+        {sheets.length > 1 && <option value={ALL_SHEETS}>Усі листи разом</option>}
+        {sheets.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+      </select>
+      {can_manage && onManage && (
+        <button className="btn-icon" aria-label="Керувати листами" onClick={onManage}>
+          {Icons.pencil(16)}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* обирає лист за замовчуванням («Загальний бюджет»), коли список приїхав */
+export function useSheetSelection() {
+  const { sheets } = useSheets()
+  const [sheet, setSheet] = useState('')
+  useEffect(() => {
+    if (!sheets.length) return
+    if (sheet === ALL_SHEETS || sheets.some((s) => String(s.id) === sheet)) return
+    const general = sheets.find((s) => s.is_general) || sheets[0]
+    setSheet(String(general.id))
+  }, [sheets]) // eslint-disable-line react-hooks/exhaustive-deps
+  return [sheet, setSheet, sheets]
+}
+
+/* ---------- керування листами: додати / перейменувати / видалити ---------- */
+function SheetEditModal({ sheet, sheets, color, onClose, onSaved }) {
+  const isNew = !sheet
+  const [name, setName] = useState(sheet?.name || '')
+  const [busy, setBusy] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [moveTo, setMoveTo] = useState('')
+  const [count, setCount] = useState(0)
+  const [toast, showToast] = useToast()
+  const others = sheets.filter((s) => s.id !== sheet?.id)
+
+  const save = async () => {
+    if (!name.trim() || busy) return
+    setBusy(true)
+    try {
+      if (isNew) await post('/api/finance/sheets', { name: name.trim() })
+      else await patch(`/api/finance/sheets/${sheet.id}`, { name: name.trim() })
+      await refreshSheets()
+      onSaved()
+    } catch (e) { showToast(e.message, 'warn'); setBusy(false) }
+  }
+
+  const remove = async (target) => {
+    setBusy(true)
+    try {
+      await del(`/api/finance/sheets/${sheet.id}${target ? `?move_to=${target}` : ''}`)
+      await refreshSheets()
+      onSaved()
+    } catch (e) {
+      const m = /^expenses_present:(\d+)$/.exec(e.message)
+      if (m) { setCount(Number(m[1])); setMoveTo(String(others[0]?.id || '')) }
+      else showToast(e.message, 'warn')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <CenterModal
+      title={isNew ? 'Новий лист витрат' : 'Лист витрат'}
+      sub={sheet?.is_general ? 'загальний' : undefined}
+      onClose={onClose}
+      footer={(
+        <>
+          <button className="btn-primary" style={{ background: color, opacity: name.trim() ? 1 : 0.45 }}
+            disabled={busy || !name.trim()} onClick={save}>
+            {busy ? 'Зберігаю…' : isNew ? 'Створити лист' : 'Зберегти зміни'}
+          </button>
+          {!isNew && !sheet.is_general && (
+            <button className="btn-small ghost danger" disabled={busy} onClick={() => setConfirmDel(true)}>
+              {Icons.trash(15)} Видалити лист
+            </button>
+          )}
+        </>
+      )}
+    >
+      <input placeholder="Назва (напр. Зйомка Nike)" value={name} autoFocus
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && save()} />
+      {isNew && <div className="preview-meta">У листа буде свій бюджет і свої витрати</div>}
+      {sheet?.is_general && (
+        <div className="preview-meta">
+          Загальний лист прибрати не можна — саме туди йдуть витрати, для яких лист не вказано.
+        </div>
+      )}
+      {confirmDel && (
+        <ConfirmDialog text="Впевнені, що видалити лист?"
+          onYes={() => { setConfirmDel(false); remove(null) }}
+          onNo={() => setConfirmDel(false)} />
+      )}
+      {count > 0 && (
+        <CenterModal title="Куди перенести витрати?" sub={`у листі ${count}`} onClose={() => setCount(0)}>
+          <div className="preview-meta">Лист не порожній. Оберіть, куди перекласти — нічого не загубиться.</div>
+          <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+            {others.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+          </select>
+          <button className="btn-primary" style={{ background: 'var(--red)' }}
+            disabled={busy || !moveTo} onClick={() => { setCount(0); remove(moveTo) }}>
+            Перенести й видалити лист
+          </button>
+        </CenterModal>
+      )}
+      {toast}
+    </CenterModal>
+  )
+}
+
+export function SheetsModal({ color = 'var(--orange)', onClose }) {
+  const { sheets } = useSheets()
+  const [edit, setEdit] = useState(null) // обʼєкт листа або 'new'
+  return (
+    <CenterModal title="Листи витрат" sub={`${sheets.length}`} onClose={onClose}>
+      <div className="card" style={{ padding: '2px 14px' }}>
+        {sheets.map((s) => (
+          <div key={s.id} className="dict-row" role="button" tabIndex={0} onClick={() => setEdit(s)}>
+            <span className="dict-ico" style={{ background: s.is_general ? 'var(--ink)' : color }}>
+              {Icons.wallet(18)}
+            </span>
+            <span className="dict-info">
+              <span className="dict-name">{s.name}</span>
+              <span className="dict-sub">{s.is_general ? 'загальний' : 'свій лист'}</span>
+            </span>
+            <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons.pencil(15)}</span>
+          </div>
+        ))}
+      </div>
+      <button className="btn-dashed" style={{ color }} onClick={() => setEdit('new')}>
+        {Icons.plus(18)} Додати лист
+      </button>
+      {edit && (
+        <SheetEditModal sheet={edit === 'new' ? null : edit} sheets={sheets} color={color}
+          onClose={() => setEdit(null)} onSaved={() => setEdit(null)} />
+      )}
+    </CenterModal>
   )
 }
 

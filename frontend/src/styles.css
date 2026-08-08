@@ -199,6 +199,20 @@ html, body {
 .prio { display: flex; align-items: center; flex-shrink: 0; }
 .prio-dot { width: 9px; height: 9px; border-radius: 50%; display: block; }
 
+/* ---------- вибір листа витрат ---------- */
+.sheet-picker {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 6px 10px 6px 13px;
+}
+.sheet-picker .ico { color: var(--muted); display: flex; flex-shrink: 0; }
+.sheet-picker select {
+  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  font-family: inherit; font-size: 15.5px; font-weight: 700; color: var(--ink);
+  padding: 9px 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+
 /* ---------- дедлайн: дата + час ---------- */
 .due-row { display: flex; gap: 8px; align-items: center; }
 .due-row input[type="date"] { flex: 1 1 58%; min-width: 0; }

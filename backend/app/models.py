@@ -30,6 +30,9 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="assistant")  # owner|manager|assistant|driver
     permissions: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|invited
+    # постійний бачить лист цілком; тимчасовий — лише те, що зʼявилось із visible_from
+    employment: Mapped[str] = mapped_column(String(10), default="permanent")  # permanent|temporary
+    visible_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -118,6 +121,7 @@ class Expense(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    sheet_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)
     category: Mapped[str] = mapped_column(String(20), default="finance")
     text: Mapped[str] = mapped_column(Text, default="")
@@ -173,6 +177,20 @@ class TaskPriority(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ExpenseSheet(Base):
+    """Лист витрат: «Загальний бюджет» (системний, не видаляється) + листи під зйомки.
+    У кожного листа свої витрати і свій бюджет; людині можна відкрити не всі."""
+
+    __tablename__ = "expense_sheets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120))
+    is_general: Mapped[bool] = mapped_column(Boolean, default=False)  # куди падає все за замовчуванням
+    sort: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class BudgetItem(Base):
     """Секції бюджету місяця («на що» + сума). Сума секцій = бюджет; якщо порожньо — MONTHLY_BUDGET з .env."""
 
@@ -180,6 +198,7 @@ class BudgetItem(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    sheet_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(120))
     amount: Mapped[float] = mapped_column(Float, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

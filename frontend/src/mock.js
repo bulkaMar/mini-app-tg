@@ -17,6 +17,13 @@ export const MOCK = {
     telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role],
     permissions: {}, task_categories: TASK_CATS[role] || [],
   },
+  '/api/finance/sheets': {
+    sheets: [
+      { id: 1, name: 'Загальний бюджет', is_general: true },
+      { id: 2, name: 'Зйомка Nike', is_general: false },
+    ],
+    can_manage: role === 'owner',
+  },
   '/api/dictionaries': {
     categories: [
       { id: 1, key: 'production', label: 'Проєкти', icon: 'film', color: 'blue', roles: ['manager'], is_system: true, can_use: TASK_CATS[role]?.includes('production') },
@@ -73,11 +80,11 @@ export const MOCK = {
     { id: 3, text: 'Оплата підрядника проведена', level: 'low', resolved: true, keyword_hit: false, owner_role: 'manager', time: '2026-06-09T18:00:00' },
   ],
   '/api/money': {
-    spent: 12400, budget: 17000, budget_pct: 73, can_approve: role === 'owner',
+    sheet_id: 1, spent: 12400, budget: 17000, budget_pct: 73, can_approve: role === 'owner',
     expenses: [
-      { id: 1, text: 'Оренда обладнання', amount: 4500, currency: 'UAH', approved: false, approved_at: null, comment: '', mine: false, owner_role: 'manager', time: '2026-06-10T09:40:00' },
-      { id: 2, text: 'Паливо', amount: 1100, currency: 'UAH', approved: true, approved_at: '2026-06-10T18:25:00', comment: 'Заправляйся на ОККО — там дешевше', mine: role === 'driver', owner_role: 'driver', time: '2026-06-10T08:40:00' },
-      { id: 3, text: 'Продукти', amount: 480, currency: 'UAH', approved: true, approved_at: '2026-06-10T12:10:00', comment: '', mine: role === 'assistant', owner_role: 'assistant', time: '2026-06-10T09:05:00' },
+      { id: 1, sheet_id: 2, text: 'Оренда обладнання', amount: 4500, currency: 'UAH', approved: false, approved_at: null, comment: '', mine: false, owner_role: 'manager', time: '2026-06-10T09:40:00' },
+      { id: 2, sheet_id: 1, text: 'Паливо', amount: 1100, currency: 'UAH', approved: true, approved_at: '2026-06-10T18:25:00', comment: 'Заправляйся на ОККО — там дешевше', mine: role === 'driver', owner_role: 'driver', time: '2026-06-10T08:40:00' },
+      { id: 3, sheet_id: 1, text: 'Продукти', amount: 480, currency: 'UAH', approved: true, approved_at: '2026-06-10T12:10:00', comment: '', mine: role === 'assistant', owner_role: 'assistant', time: '2026-06-10T09:05:00' },
     ],
   },
   '/api/budget': {
@@ -89,7 +96,7 @@ export const MOCK = {
     ],
   },
   '/api/team': [
-    { id: 1, name: 'Ти', username: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {} },
+    { id: 1, name: 'Ти', username: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {}, employment: 'permanent', visible_from: null },
     { id: 2, name: 'Марія К.', username: 'maria_pm', role: 'manager', role_label: 'менеджер', status: 'active', permissions: {} },
     { id: 3, name: 'Оля Л.', username: 'olya', role: 'assistant', role_label: 'асистент', status: 'active', permissions: {} },
     { id: 4, name: 'Віктор Д.', username: 'viktor_d', role: 'driver', role_label: 'водій', status: 'invited', permissions: {} },

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, byPriority, colorVar, fmtDue, isOverdue, directionLabel, findCat, fmtTime, useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
+  useSheetSelection, useSheets, Field, Segmented, directionLabel, findCat, fmtTime,
+  useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
 import Dictionaries from './Dictionaries'
 
@@ -22,6 +24,55 @@ const MEMBER_ROLES = [
   { value: 'assistant', label: 'Асистент' },
   { value: 'driver', label: 'Водій' },
 ]
+
+const EMPLOYMENT = [
+  { value: 'permanent', label: 'Постійний' },
+  { value: 'temporary', label: 'Тимчасовий' },
+]
+const FINANCE_SCOPE = [
+  { value: 'all', label: 'Усі листи' },
+  { value: 'sheets', label: 'Вибрані' },
+]
+
+/* Зайнятість + які листи витрат людині відкриті. Використовується і при
+   додаванні, і при редагуванні учасника. */
+function AccessFields({ employment, setEmployment, scope, setScope, picked, setPicked }) {
+  const { sheets } = useSheets()
+  const toggle = (id) =>
+    setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id])
+
+  return (
+    <>
+      <Field label="Зайнятість">
+        <Segmented options={EMPLOYMENT} value={employment} onChange={setEmployment} />
+        <div className="due-hint">
+          {employment === 'temporary'
+            ? 'Бачитиме лише те, що зʼявиться з дня, коли ви його додали'
+            : 'Бачитиме відкриті листи цілком, разом зі старими записами'}
+        </div>
+      </Field>
+      <Field label="Доступ до фінансів">
+        <Segmented options={FINANCE_SCOPE} value={scope} onChange={setScope} />
+      </Field>
+      {scope === 'sheets' && (
+        <Field label="Які саме листи">
+          <div className="seg">
+            {sheets.map((sh) => (
+              <button key={sh.id} type="button"
+                className={`seg-btn ${picked.includes(sh.id) ? 'on' : ''}`}
+                style={picked.includes(sh.id)
+                  ? { background: 'var(--orange)', borderColor: 'var(--orange)' } : undefined}
+                onClick={() => toggle(sh.id)}>
+                {sh.name}
+              </button>
+            ))}
+          </div>
+          {picked.length === 0 && <div className="due-hint">Не обрано жодного — фінансів не побачить</div>}
+        </Field>
+      )}
+    </>
+  )
+}
 
 // ім'я активного учасника певної ролі (перше слово) + підпис у шапці сторінки
 const memberName = (team, role) => {
@@ -171,6 +222,9 @@ function Team() {
   const [username, setUsername] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('manager')
+  const [employment, setEmployment] = useState('permanent')
+  const [scope, setScope] = useState('all')
+  const [picked, setPicked] = useState([])
   const [toast, showToast] = useToast()
 
   const load = useCallback(() => get('/api/team').then(setTeam).catch(() => setTeam([])), [])
@@ -179,7 +233,10 @@ function Team() {
   const invite = async () => {
     if (!username.trim()) return
     try {
-      await post('/api/team', { username: username.trim(), name: name.trim(), role })
+      await post('/api/team', {
+        username: username.trim(), name: name.trim(), role,
+        employment, finance_scope: scope, finance_sheets: picked,
+      })
       setAdding(false); setUsername(''); setName('')
       showToast('Запрошення надіслано', 'ok')
       load()
@@ -191,7 +248,11 @@ function Team() {
   // ролі, яких ще немає в команді — зайняту роль у дропдауні не пропонуємо
   const used = new Set(team.map((m) => m.role))
   const freeRoles = MEMBER_ROLES.filter((r) => !used.has(r.value))
-  const openAdd = () => { setRole(freeRoles[0]?.value || ''); setUsername(''); setName(''); setAdding(true) }
+  const openAdd = () => {
+    setRole(freeRoles[0]?.value || ''); setUsername(''); setName('')
+    setEmployment('permanent'); setScope('all'); setPicked([])
+    setAdding(true)
+  }
   const canInvite = username.trim() && name.trim() // кнопка активна лише коли заповнені поля
 
   return (
@@ -210,6 +271,7 @@ function Team() {
               <div className="name">{m.name || `@${m.username}`}</div>
               <div className="uname">
                 {m.status === 'invited' ? 'запрошення надіслано' : m.role === 'owner' ? 'повний доступ' : m.username ? `@${m.username}` : ''}
+                {m.employment === 'temporary' && ' · тимчасовий'}
               </div>
             </div>
             <span className={`badge ${m.status === 'invited' ? 'outline' : ''}`}
@@ -237,6 +299,8 @@ function Team() {
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             {freeRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
+          <AccessFields employment={employment} setEmployment={setEmployment}
+            scope={scope} setScope={setScope} picked={picked} setPicked={setPicked} />
           <button className="btn-primary" style={{ background: 'var(--orange)', opacity: canInvite ? 1 : 0.45 }}
             disabled={!canInvite} onClick={invite}>
             Додати учасника
@@ -254,22 +318,32 @@ function Team() {
 
 /* ---------- редагування учасника ---------- */
 function MemberSheet({ m, onClose, onChanged }) {
+  const fin = (m.permissions || {}).finance || {}
   const [name, setName] = useState(m.name || '')
   const [username, setUsername] = useState(m.username || '')
   const [role, setRole] = useState(m.role)
+  const [employment, setEmployment] = useState(m.employment || 'permanent')
+  const [scope, setScope] = useState(fin.scope || 'all')
+  const [picked, setPicked] = useState(fin.sheets || [])
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
   const changed =
     name.trim() !== (m.name || '') ||
     username.trim().replace(/^@/, '') !== (m.username || '') ||
-    role !== m.role
+    role !== m.role ||
+    employment !== (m.employment || 'permanent') ||
+    scope !== (fin.scope || 'all') ||
+    JSON.stringify([...picked].sort()) !== JSON.stringify([...(fin.sheets || [])].sort())
 
   const save = async (extra = {}) => {
     if (busy) return
     setBusy(true)
     try {
-      await patch(`/api/team/${m.id}`, { name: name.trim(), username: username.trim(), role, ...extra })
+      await patch(`/api/team/${m.id}`, {
+        name: name.trim(), username: username.trim(), role,
+        employment, finance_scope: scope, finance_sheets: picked, ...extra,
+      })
       onChanged()
     } catch (e) { showToast(e.message, 'warn') } finally { setBusy(false) }
   }
@@ -287,6 +361,8 @@ function MemberSheet({ m, onClose, onChanged }) {
         <option value="assistant">Асистент</option>
         <option value="driver">Водій</option>
       </select>
+      <AccessFields employment={employment} setEmployment={setEmployment}
+        scope={scope} setScope={setScope} picked={picked} setPicked={setPicked} />
       <button className="btn-primary" style={{ background: 'var(--orange)', opacity: changed ? 1 : 0.45 }}
         disabled={busy || !changed} onClick={() => save()}>
         {busy ? 'Зберігаю…' : 'Зберегти зміни'}
@@ -311,21 +387,30 @@ function Finance({ onBack }) {
   const [adding, setAdding] = useState(false)
   const [sel, setSel] = useState(null) // вибрана витрата → шторка з коментарем
   const [editBudget, setEditBudget] = useState(false)
+  const [manageSheets, setManageSheets] = useState(false)
   const [text, setText] = useState('')
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
+  const [sheet, setSheet, sheets] = useSheetSelection()
+  const allSheets = sheet === ALL_SHEETS
 
   const load = useCallback(() => {
-    get('/api/money').then(setM).catch(() => {})
+    if (!sheet) return
+    get(`/api/money?sheet=${sheet}`).then(setM).catch(() => {})
     get('/api/team').then(setTeam).catch(() => {})
-  }, [])
+  }, [sheet])
   usePoll(load)
   useLiveSel(m?.expenses, sel, setSel) // відкрита витрата оновлюється наживо
 
   const addExpense = async () => {
     if (!text.trim() || !amount) return
     try {
-      await post('/api/money', { text: text.trim(), amount: Number(amount) })
+      // у режимі «усі листи» витрата йде в загальний
+      const target = allSheets ? (sheets.find((s) => s.is_general) || sheets[0]) : null
+      await post('/api/money', {
+        text: text.trim(), amount: Number(amount),
+        sheet_id: allSheets ? target?.id : Number(sheet),
+      })
       setAdding(false); setText(''); setAmount('')
       load()
     } catch (e) { showToast(e.message, 'warn') }
@@ -338,13 +423,23 @@ function Finance({ onBack }) {
   if (!m) return <div className="loading">Завантаження…</div>
   const monthName = new Date().toLocaleDateString('uk-UA', { month: 'long' })
 
-  // розподіл витрат за напрямом (для кругової діаграми)
+  // діаграма: в одному листі ділимо за напрямом, у режимі «усі листи» — за листами
   const AREA = { manager: ['Проєкти', 'var(--blue)'], assistant: ['Побут', 'var(--green)'], driver: ['Логістика', 'var(--gold)'], owner: ['Інше', 'var(--orange)'] }
-  const byArea = {}
-  ;(m.expenses || []).forEach((e) => { byArea[e.owner_role] = (byArea[e.owner_role] || 0) + (e.amount || 0) })
-  const donutData = Object.entries(byArea)
+  const SHEET_COLORS = ['var(--orange)', 'var(--blue)', 'var(--green)', 'var(--gold)', 'var(--red)', 'var(--ink)']
+  const bucket = {}
+  ;(m.expenses || []).forEach((e) => {
+    const key = allSheets ? e.sheet_id : e.owner_role
+    bucket[key] = (bucket[key] || 0) + (e.amount || 0)
+  })
+  const donutData = Object.entries(bucket)
     .filter(([, v]) => v > 0)
-    .map(([role, v]) => ({ label: (AREA[role] || [role])[0], color: (AREA[role] || [role, 'var(--muted)'])[1], value: Math.round(v) }))
+    .map(([key, v], i) => {
+      if (allSheets) {
+        const s = sheets.find((x) => String(x.id) === String(key))
+        return { label: s?.name || 'Без листа', color: SHEET_COLORS[i % SHEET_COLORS.length], value: Math.round(v) }
+      }
+      return { label: (AREA[key] || [key])[0], color: (AREA[key] || [key, 'var(--muted)'])[1], value: Math.round(v) }
+    })
     .sort((a, b) => b.value - a.value)
   const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
 
@@ -352,16 +447,18 @@ function Finance({ onBack }) {
     <div className="screen">
       {onBack && <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>}
       <Header icon="wallet" color="var(--orange)" title="Фінанси" sub={monthName} />
+      <SheetPicker value={sheet} onChange={setSheet} onManage={() => setManageSheets(true)} />
       <div className="stat-grid">
         <div className="stat"><div className="num">{m.spent.toLocaleString('uk-UA')} <small>₴</small></div><div className="lbl">витрачено</div></div>
         <div className="stat"><div className="num">{m.budget_pct}<small>%</small></div><div className="lbl">бюджету</div></div>
       </div>
-      <Meter title="Бюджет місяця" value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
+      <Meter title={allSheets ? 'Бюджет усіх листів' : 'Бюджет місяця'}
+        value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
         pct={m.budget_pct} level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'}
-        onEdit={() => setEditBudget(true)} />
+        onEdit={allSheets ? undefined : () => setEditBudget(true)} />
       {donutData.length > 0 && (
         <div className="card">
-          <div className="donut-title">На що йдуть гроші</div>
+          <div className="donut-title">{allSheets ? 'Як розкладено по листах' : 'На що йдуть гроші'}</div>
           <DonutChart data={donutData} centerValue={`${donutTotal.toLocaleString('uk-UA')} ₴`} centerCap="всього" />
         </div>
       )}
@@ -411,8 +508,11 @@ function Finance({ onBack }) {
           onChanged={() => { setSel(null); load() }} />
       )}
       {editBudget && (
-        <BudgetSheet onClose={() => setEditBudget(false)}
+        <BudgetSheet sheet={sheet} onClose={() => setEditBudget(false)}
           onSaved={() => { setEditBudget(false); load() }} />
+      )}
+      {manageSheets && (
+        <SheetsModal onClose={() => { setManageSheets(false); load() }} />
       )}
       {toast}
     </div>
@@ -420,20 +520,20 @@ function Finance({ onBack }) {
 }
 
 /* ---------- бюджет місяця: секції «на що + сума» ---------- */
-function BudgetSheet({ onClose, onSaved }) {
+function BudgetSheet({ sheet, onClose, onSaved }) {
   const [items, setItems] = useState(null)
   const [busy, setBusy] = useState(false)
   const [toast, showToast] = useToast()
 
   useEffect(() => {
-    get('/api/budget')
+    get(`/api/budget?sheet=${sheet}`)
       .then((b) => setItems(
         b.items.length
           ? b.items.map((i) => ({ name: i.name, amount: String(Math.round(i.amount)) }))
           : [{ name: '', amount: '' }],
       ))
       .catch(() => setItems([{ name: '', amount: '' }]))
-  }, [])
+  }, [sheet])
 
   const upd = (idx, field, v) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: v } : it)))
   const removeRow = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx))
@@ -445,7 +545,9 @@ function BudgetSheet({ onClose, onSaved }) {
   const save = async () => {
     setBusy(true)
     try {
-      await put('/api/budget', { items: items.map((i) => ({ name: i.name.trim(), amount: Number(i.amount) })) })
+      await put(`/api/budget?sheet=${sheet}`, {
+        items: items.map((i) => ({ name: i.name.trim(), amount: Number(i.amount) })),
+      })
       onSaved()
     } catch (e) { showToast(e.message, 'warn') } finally { setBusy(false) }
   }

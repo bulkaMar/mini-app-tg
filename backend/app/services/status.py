@@ -20,13 +20,19 @@ from .saver import resolve_target_role
 ROLE_LABELS = {"owner": "власник", "manager": "менеджер", "assistant": "асистент", "driver": "водій"}
 
 
-async def monthly_budget(session: AsyncSession, workspace_id: int | None) -> float:
-    """Сума секцій бюджету простору; якщо секцій немає — MONTHLY_BUDGET з .env."""
+async def monthly_budget(
+    session: AsyncSession, workspace_id: int | None, sheet_ids: list[int] | None = None
+) -> float:
+    """Сума секцій бюджету. `sheet_ids` звужує до конкретних листів витрат;
+    без нього — весь простір. Якщо секцій немає — MONTHLY_BUDGET з .env."""
+    where = [BudgetItem.workspace_id == workspace_id]
+    if sheet_ids is not None:
+        if not sheet_ids:
+            return settings.monthly_budget
+        where.append(BudgetItem.sheet_id.in_(sheet_ids))
     total = (
         await session.execute(
-            select(func.coalesce(func.sum(BudgetItem.amount), 0.0)).where(
-                BudgetItem.workspace_id == workspace_id
-            )
+            select(func.coalesce(func.sum(BudgetItem.amount), 0.0)).where(*where)
         )
     ).scalar_one()
     return float(total) or settings.monthly_budget

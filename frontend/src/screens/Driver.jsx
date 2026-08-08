@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, ExpenseSheet, Header, Icons, MoneyInput, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useToast } from '../components'
+import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
@@ -127,13 +127,21 @@ function Money() {
   const [text, setText] = useState('')
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
-  const load = useCallback(() => get('/api/money').then(setM).catch(() => {}), [])
+  const [sheet, setSheet, sheets] = useSheetSelection()
+  const load = useCallback(() => {
+    if (!sheet) return
+    get(`/api/money?sheet=${sheet}`).then(setM).catch(() => {})
+  }, [sheet])
   usePoll(load)
   useLiveSel(m?.expenses, sel, setSel) // відкрита витрата оновлюється наживо
 
   const add = async () => {
     try {
-      await post('/api/money', { text: text.trim(), amount: Number(amount) })
+      const target = sheet === ALL_SHEETS ? (sheets.find((s) => s.is_general) || sheets[0]) : null
+      await post('/api/money', {
+        text: text.trim(), amount: Number(amount),
+        sheet_id: target ? target.id : Number(sheet),
+      })
       setAdding(false); setText(''); setAmount('')
       load()
     } catch (e) { showToast(e.message, 'warn') }
@@ -143,6 +151,7 @@ function Money() {
   return (
     <div className="screen">
       <Header icon="fuel" color="var(--gold)" title="Фінанси" sub="паливо й витрати" />
+      <SheetPicker value={sheet} onChange={setSheet} />
       <button className="btn-primary" style={{ background: 'var(--gold)' }} onClick={() => setAdding(true)}>
         {Icons.plus(20)} Додати витрату
       </button>
