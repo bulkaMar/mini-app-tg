@@ -117,12 +117,7 @@ function Home({ openView }) {
 
   return (
     <div className="screen">
-      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`}
-        right={(
-          <button className="btn-icon" aria-label="Розділи та важливість" onClick={() => openView('settings')}>
-            {Icons.gear(20)}
-          </button>
-        )} />
+      <Header icon="pulse" color="var(--orange)" title="Головна" sub={`сьогодні · ${dateStr}`} />
 
       {rows.map((r) => (
         <button key={r.key} className="status-row" onClick={() => openView(r.key)}>
@@ -138,6 +133,17 @@ function Home({ openView }) {
 
       <Meter title="Темп" value={LOAD_LABEL[d.load]} pct={LOAD_PCT[d.load]}
         level={d.load === 'LOW' ? 'low' : d.load === 'MED' ? 'med' : 'high'} />
+
+      {/* налаштування — окремим підписаним рядком: іконкою в шапці її не було
+          видно, бо той кут займає дзвіночок */}
+      <button className="nav-row" onClick={() => openView('settings')}>
+        <span className="ico">{Icons.gear(20)}</span>
+        <span className="grow">
+          Розділи та важливість
+          <span className="row-sub">що можна вибирати при створенні справи</span>
+        </span>
+        <span className="chev">›</span>
+      </button>
     </div>
   )
 }
