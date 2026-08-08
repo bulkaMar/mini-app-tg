@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { get, patch, post } from '../api'
+import { get, post } from '../api'
 import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
 
 export default function Assistant({ me }) {

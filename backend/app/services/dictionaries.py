@@ -28,7 +28,6 @@ SYSTEM_PRIORITIES = [
 ]
 
 FALLBACK_PRIORITY = "normal"
-FALLBACK_CATEGORY = "life"
 
 
 async def seed_dictionaries(session: AsyncSession, workspace_id: int | None) -> None:

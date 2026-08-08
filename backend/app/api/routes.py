@@ -32,7 +32,6 @@ from ..services.finance import (
 )
 from ..services.notify import route_notifications
 from ..services.roles import (
-    BASES,
     all_roles,
     members_with_role,
     new_role_key,

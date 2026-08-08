@@ -1,4 +1,4 @@
-"""Розрахунок статусів напрямків, темпу та стрічки для панелі owner.
+"""Розрахунок статусів напрямків і темпу для панелі owner.
 
 Правила переходів 🟢🟡🔴 (стартові, узгодити з owner):
 - risk:   немає активних → ok; є low/med → warn; є high → crit
@@ -14,10 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..models import BudgetItem, Expense, Message, Risk, Task, User
-from .saver import resolve_target_role
-
-ROLE_LABELS = {"owner": "власник", "manager": "менеджер", "assistant": "асистент", "driver": "водій"}
+from ..models import BudgetItem, Expense, Risk, Task
 
 
 async def monthly_budget(
@@ -89,31 +86,6 @@ async def compute_dashboard(session: AsyncSession, workspace_id: int | None) -> 
     load_score = total_open + 2 * risk_count
     load = "LOW" if load_score < 5 else ("MED" if load_score < 10 else "HIGH")
 
-    # стрічка «Надійшло» — останні повідомлення команди
-    feed_rows = (
-        await session.execute(
-            select(Message, User.name)
-            .join(User, User.telegram_id == Message.telegram_id, isouter=True)
-            .where(Message.workspace_id == workspace_id)
-            .order_by(Message.created_at.desc())
-            .limit(20)
-        )
-    ).all()
-    feed = [
-        {
-            "id": m.id,
-            "role": m.sender_role,
-            "role_label": ROLE_LABELS.get(m.sender_role, m.sender_role),
-            "target_role": m.target_role or resolve_target_role(m.sender_role, m.category),
-            "name": name or "",
-            "type": m.classified_type,
-            "category": m.category,
-            "text": m.clean_text or m.raw_text,
-            "time": m.created_at.isoformat() if m.created_at else None,
-        }
-        for m, name in feed_rows
-    ]
-
     return {
         "statuses": statuses,
         "counts": {
@@ -129,5 +101,4 @@ async def compute_dashboard(session: AsyncSession, workspace_id: int | None) -> 
             "budget_pct": budget_pct,
         },
         "load": load,
-        "feed": feed,
     }

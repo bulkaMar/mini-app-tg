@@ -50,10 +50,6 @@ def due_out(task) -> str | None:
     return at.strftime("%Y-%m-%dT%H:%M") if task.due_time_set else at.strftime("%Y-%m-%d")
 
 
-# базові розділи задач (finance — не задача, а витрата). Це лише те, що вміє
-# називати AI-класифікатор; повний перелік розділів живе в БД — див. dictionaries.py
-BASE_TASK_CATEGORIES = ("production", "life", "dog", "logistics")
-
 # кому адресовано запис (для напрямку «хто → кому» у стрічці)
 _CATEGORY_TO_ROLE = {"production": "manager", "life": "assistant", "dog": "assistant", "logistics": "driver"}
 

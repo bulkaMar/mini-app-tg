@@ -64,10 +64,6 @@ async def all_roles(session: AsyncSession, workspace_id: int | None) -> list[Rol
     )).scalars().all())
 
 
-async def role_map(session: AsyncSession, workspace_id: int | None) -> dict[str, Role]:
-    return {r.key: r for r in await all_roles(session, workspace_id)}
-
-
 async def role_labels(session: AsyncSession, workspace_id: int | None) -> dict[str, str]:
     """Підписи ролей простору поверх запасних."""
     out = dict(FALLBACK_LABELS)

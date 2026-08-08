@@ -55,13 +55,6 @@ export const MOCK = {
     statuses: { production: 'ok', life: 'warn', logistics: 'warn', money: 'ok', risk: 'crit' },
     counts: { open_tasks: 6, life_open: 3, production_open: 3, logistics_open: 2, risk_active: 2, spent: 12400, budget: 17000, budget_pct: 73, by_category: { production: 3, life: 2, dog: 1, logistics: 2, c_demo01: 1 } },
     load: 'MED',
-    feed: [
-      { id: 5, role: 'owner', role_label: 'власник', target_role: 'assistant', type: 'task', category: 'dog', text: 'Купити корм псу', time: '2026-06-10T09:50:00' },
-      { id: 4, role: 'owner', role_label: 'власник', target_role: 'driver', type: 'task', category: 'logistics', text: 'Домовитись за поїздку на завтра', time: '2026-06-10T09:45:00' },
-      { id: 1, role: 'manager', role_label: 'менеджер', target_role: 'owner', type: 'risk', category: 'production', text: 'Тривога: зрив локації', time: '2026-06-10T09:32:00' },
-      { id: 2, role: 'assistant', role_label: 'асистент', target_role: 'owner', type: 'status', category: 'life', text: 'Записала на хімчистку', time: '2026-06-10T09:30:00' },
-      { id: 3, role: 'driver', role_label: 'водій', target_role: 'owner', type: 'money', category: 'finance', text: 'Паливо · 1 100 ₴', time: '2026-06-10T08:40:00' },
-    ],
   },
   '/api/feed': [
     { id: 5, role: 'owner', role_label: 'власник', target_role: 'manager', type: 'task', category: 'production', text: 'Нагадати про монтаж', time: '2026-06-10T09:52:00' },

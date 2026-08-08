@@ -181,10 +181,7 @@ export function PriorityMark({ p }) {
 export const byPriority = (dict) => (a, b) =>
   (findPrio(dict, a.priority)?.rank ?? 1000) - (findPrio(dict, b.priority)?.rank ?? 1000)
 
-export const ROLE_COLOR = { owner: 'var(--ink)', manager: 'var(--blue)', assistant: 'var(--green)', driver: 'var(--gold)' }
-export const ROLE_BADGE = { owner: 'ВЛАСНИК', manager: 'МЕНЕДЖЕР', assistant: 'АСИСТЕНТ', driver: 'ВОДІЙ' }
 export const TYPE_LABEL = { task: 'ЗАДАЧА', risk: 'ТРИВОГА', money: 'ФІНАНСИ', status: 'СТАТУС' }
-export const CAT_LABEL = { production: 'ПРОЄКТ', life: 'ПОБУТ', dog: 'ПЕС', finance: 'ФІНАНСИ', logistics: 'ПОДАЧА' }
 
 /* напрямок запису «хто → кому»: себе показуємо особисто (власник — «Ти», решта — «Я») */
 const ROLE_NAME = { owner: 'Власник', manager: 'Менеджер', assistant: 'Асистент', driver: 'Водій' }
