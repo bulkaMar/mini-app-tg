@@ -14,8 +14,21 @@ const TASK_CATS = {
 
 export const MOCK = {
   '/api/me': {
-    telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role],
+    telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role], base: role,
     permissions: {}, task_categories: TASK_CATS[role] || [],
+  },
+  '/api/roles': {
+    roles: [
+      { id: 1, key: 'owner', label: 'Власник', color: 'ink', base: 'owner', is_system: true, members: 1 },
+      { id: 2, key: 'coowner', label: 'Співвласник', color: 'ink', base: 'manager', is_system: false, members: 0 },
+      { id: 3, key: 'manager', label: 'Менеджер', color: 'blue', base: 'manager', is_system: true, members: 1 },
+      { id: 4, key: 'assistant', label: 'Асистент', color: 'green', base: 'assistant', is_system: true, members: 1 },
+      { id: 5, key: 'driver', label: 'Водій', color: 'gold', base: 'driver', is_system: true, members: 1 },
+      { id: 6, key: 'photographer', label: 'Фотограф', color: 'orange', base: 'manager', is_system: false, members: 0 },
+      { id: 7, key: 'makeup', label: 'Візажист', color: 'red', base: 'assistant', is_system: false, members: 0 },
+      { id: 8, key: 'helper1', label: 'Помічник 1', color: 'muted', base: 'assistant', is_system: false, members: 0 },
+    ],
+    can_manage: role === 'owner',
   },
   '/api/finance/sheets': {
     sheets: [

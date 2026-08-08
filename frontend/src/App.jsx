@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { get } from './api'
 import { initTelegram } from './telegram'
-import { Icons } from './components'
+import { Icons, useRoles } from './components'
 import Owner from './screens/Owner'
 import Manager from './screens/Manager'
 import Assistant from './screens/Assistant'
@@ -10,6 +10,7 @@ import Driver from './screens/Driver'
 export default function App() {
   const [me, setMe] = useState(null)
   const [error, setError] = useState(null)
+  useRoles() // тримаємо довідник ролей завантаженим для всього застосунку
 
   useEffect(() => {
     initTelegram()
@@ -32,12 +33,13 @@ export default function App() {
 
   if (!me) return <div className="loading" style={{ paddingTop: '40vh' }}>Завантаження…</div>
 
-  // роутинг за роллю: кожен бачить тільки свій екран
-  switch (me.role) {
+  // Роутинг за «поводиться як»: у власної ролі («Фотограф») своя назва й колір,
+  // але екран — один із чотирьох базових, поки немає тумблерів розділів (0.5–0.7).
+  switch (me.base || me.role) {
     case 'owner': return <Owner me={me} />
     case 'manager': return <Manager me={me} />
     case 'assistant': return <Assistant me={me} />
     case 'driver': return <Driver me={me} />
-    default: return <div className="empty">Невідома роль: {me.role}</div>
+    default: return <Assistant me={me} />
   }
 }

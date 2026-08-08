@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, patch, post, put } from '../api'
 import {
-  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NoSheets, NotificationBell, ItemsBadge, PriorityMark, ROLE_BADGE, ROLE_COLOR, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
-  useSheetSelection, useSheets, Field, Segmented, directionLabel, findCat, fmtTime,
+  CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NoSheets, NotificationBell, ItemsBadge, PriorityMark, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
+  useSheetSelection, useSheets, useRoles, assignableRoles, findRole, Field, Segmented,
+  directionLabel, findCat, fmtTime,
   useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
 import Dictionaries from './Dictionaries'
+import Roles from './Roles'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
@@ -19,12 +21,6 @@ const plural = (n, one, few, many) => {
 const spravy = (n) => `${n} ${plural(n, 'справа', 'справи', 'справ')}`
 const aktyvni = (n) => `${n} ${plural(n, 'активна', 'активні', 'активних')}`
 const poyizdky = (n) => `${n} ${plural(n, 'поїздка', 'поїздки', 'поїздок')}`
-const MEMBER_ROLES = [
-  { value: 'manager', label: 'Менеджер' },
-  { value: 'assistant', label: 'Асистент' },
-  { value: 'driver', label: 'Водій' },
-]
-
 const EMPLOYMENT = [
   { value: 'permanent', label: 'Постійний' },
   { value: 'temporary', label: 'Тимчасовий' },
@@ -81,11 +77,14 @@ const memberName = (team, role) => {
 }
 const roleSub = (role, name, tail) => `${name ? `${role} · ${name}` : role} · ${tail}`
 
+// колір ролі з довідника (запасний — сірий, щоб ніде не було порожньо)
+const roleColor = (rd, key) => colorVar(findRole(rd, key)?.color || 'muted')
+
 // підпис «хто додав» (роль · ім'я) для витрати
-const ROLE_WORD = { owner: 'Власник', manager: 'Менеджер', assistant: 'Асистент', driver: 'Водій' }
-const authorLabel = (role, team) => {
+const authorLabel = (rd, role, team) => {
+  const word = findRole(rd, role)?.label || role
   const n = memberName(team, role)
-  return n ? `${ROLE_WORD[role] || role} · ${n}` : (ROLE_WORD[role] || role)
+  return n ? `${word} · ${n}` : word
 }
 
 export default function Owner({ me }) {
@@ -101,6 +100,7 @@ export default function Owner({ me }) {
   // будь-який інший `view` — це ключ власного розділу власниці
   const drilldown =
     view === 'settings' ? <Dictionaries onBack={back} /> :
+    view === 'roles' ? <Roles onBack={back} /> :
     view === 'production' ? <Projects onBack={back} /> :
     view === 'life' ? <Life onBack={back} /> :
     view === 'logistics' ? <Logistics onBack={back} /> :
@@ -195,6 +195,14 @@ function Home({ openView }) {
         </span>
         <span className="chev">›</span>
       </button>
+      <button className="nav-row" onClick={() => openView('roles')}>
+        <span className="ico">{Icons.shield(20)}</span>
+        <span className="grow">
+          Ролі
+          <span className="row-sub">хто буває в команді</span>
+        </span>
+        <span className="chev">›</span>
+      </button>
     </div>
   )
 }
@@ -227,6 +235,7 @@ function Team() {
   const [picked, setPicked] = useState([])
   const [toast, showToast] = useToast()
 
+  const rd = useRoles()
   const load = useCallback(() => get('/api/team').then(setTeam).catch(() => setTeam([])), [])
   usePoll(load)
 
@@ -247,7 +256,9 @@ function Team() {
   const initials = (n) => n.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   // ролі, яких ще немає в команді — зайняту роль у дропдауні не пропонуємо
   const used = new Set(team.map((m) => m.role))
-  const freeRoles = MEMBER_ROLES.filter((r) => !used.has(r.value))
+  const freeRoles = assignableRoles(rd)
+    .filter((r) => !used.has(r.key))
+    .map((r) => ({ value: r.key, label: r.label }))
   const openAdd = () => {
     setRole(freeRoles[0]?.value || ''); setUsername(''); setName('')
     setEmployment('permanent'); setScope('all'); setPicked([])
@@ -264,7 +275,7 @@ function Team() {
             role={m.role === 'owner' ? undefined : 'button'} tabIndex={m.role === 'owner' ? undefined : 0}
             style={m.role === 'owner' ? undefined : { cursor: 'pointer' }}
             onClick={m.role === 'owner' ? undefined : () => setSel(m)}>
-            <div className="avatar" style={{ background: m.status === 'invited' ? '#d9c79a' : ROLE_COLOR[m.role] }}>
+            <div className="avatar" style={{ background: m.status === 'invited' ? '#d9c79a' : roleColor(rd, m.role) }}>
               {m.role === 'owner' ? 'Я' : initials(m.name || m.username || '?')}
             </div>
             <div className="info">
@@ -275,8 +286,11 @@ function Team() {
               </div>
             </div>
             <span className={`badge ${m.status === 'invited' ? 'outline' : ''}`}
-              style={{ background: m.status === 'invited' ? 'transparent' : ROLE_COLOR[m.role], color: m.status === 'invited' ? ROLE_COLOR[m.role] : '#fff' }}>
-              {ROLE_BADGE[m.role]}
+              style={{
+                background: m.status === 'invited' ? 'transparent' : roleColor(rd, m.role),
+                color: m.status === 'invited' ? roleColor(rd, m.role) : '#fff',
+              }}>
+              {(m.role_label || m.role).toUpperCase()}
             </span>
             {m.role !== 'owner' && (
               <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons.pencil(15)}</span>
@@ -293,7 +307,8 @@ function Team() {
       )}
 
       {adding && (
-        <CenterModal title="Новий учасник" sub={ROLE_BADGE[role]} onClose={() => setAdding(false)}>
+        <CenterModal title="Новий учасник" sub={(findRole(rd, role)?.label || '').toUpperCase()}
+          onClose={() => setAdding(false)}>
           <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
           <select value={role} onChange={(e) => setRole(e.target.value)}>
@@ -308,7 +323,7 @@ function Team() {
         </CenterModal>
       )}
       {sel && (
-        <MemberSheet m={sel} onClose={() => setSel(null)}
+        <MemberSheet m={sel} rd={rd} onClose={() => setSel(null)}
           onChanged={() => { setSel(null); load() }} />
       )}
       {toast}
@@ -317,7 +332,7 @@ function Team() {
 }
 
 /* ---------- редагування учасника ---------- */
-function MemberSheet({ m, onClose, onChanged }) {
+function MemberSheet({ m, rd, onClose, onChanged }) {
   const fin = (m.permissions || {}).finance || {}
   const [name, setName] = useState(m.name || '')
   const [username, setUsername] = useState(m.username || '')
@@ -351,15 +366,15 @@ function MemberSheet({ m, onClose, onChanged }) {
   return (
     <CenterModal
       title={m.name || `@${m.username}`}
-      sub={`${ROLE_BADGE[role] || ''}${m.status === 'invited' ? ' · запрошення' : ''}`}
+      sub={`${(findRole(rd, role)?.label || role).toUpperCase()}${m.status === 'invited' ? ' · запрошення' : ''}`}
       onClose={onClose}
     >
       <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
       <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
       <select value={role} onChange={(e) => setRole(e.target.value)}>
-        <option value="manager">Менеджер</option>
-        <option value="assistant">Асистент</option>
-        <option value="driver">Водій</option>
+        {assignableRoles(rd).map((r) => (
+          <option key={r.key} value={r.key}>{r.label}</option>
+        ))}
       </select>
       <AccessFields employment={employment} setEmployment={setEmployment}
         scope={scope} setScope={setScope} picked={picked} setPicked={setPicked} />
@@ -392,6 +407,7 @@ function Finance({ onBack }) {
   const [amount, setAmount] = useState('')
   const [toast, showToast] = useToast()
   const [sheet, setSheet, sheets, noSheets] = useSheetSelection()
+  const rd = useRoles()
   const allSheets = sheet === ALL_SHEETS
 
   const load = useCallback(() => {
@@ -475,7 +491,7 @@ function Finance({ onBack }) {
           <span className="ico">{e.owner_role === 'driver' ? Icons.fuel(19) : e.owner_role === 'assistant' ? Icons.cart(19) : Icons.film(19)}</span>
           <span className="grow">
             {e.text || 'Витрата'}
-            <span className="row-sub">{authorLabel(e.owner_role, team)}</span>
+            <span className="row-sub">{authorLabel(rd, e.owner_role, team)}</span>
             {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
           </span>
           <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>

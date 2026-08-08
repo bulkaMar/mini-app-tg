@@ -5,14 +5,9 @@ import { useState } from 'react'
 import { del, patch, post, put } from '../api'
 import {
   COLOR_KEYS, CenterModal, ConfirmDialog, Field, Header, Icons, PICKABLE_ICONS,
-  Segmented, colorVar, refreshDictionaries, useDictionaries, useToast,
+  Segmented, assignableRoles, colorVar, refreshDictionaries, useDictionaries,
+  useRoles, useToast,
 } from '../components'
-
-const ROLE_OPTIONS = [
-  { value: 'manager', label: 'Менеджер' },
-  { value: 'assistant', label: 'Асистент' },
-  { value: 'driver', label: 'Водій' },
-]
 
 /* ---------- вибір іконки та кольору ---------- */
 function IconPicker({ value, onChange, color }) {
@@ -42,6 +37,7 @@ function ColorPicker({ value, onChange }) {
 
 /* ---------- вікно розділу ---------- */
 function CategoryModal({ cat, categories, onClose, onSaved }) {
+  const rd = useRoles()
   const isNew = !cat
   const [label, setLabel] = useState(cat?.label || '')
   const [icon, setIcon] = useState(cat?.icon || 'task')
@@ -95,12 +91,12 @@ function CategoryModal({ cat, categories, onClose, onSaved }) {
       <Field label="Колір"><ColorPicker value={color} onChange={setColor} /></Field>
       <Field label="Хто бачить (власниця — завжди)">
         <div className="seg">
-          {ROLE_OPTIONS.map((r) => (
-            <button key={r.value} type="button"
-              className={`seg-btn ${roles.includes(r.value) ? 'on' : ''}`}
-              style={roles.includes(r.value)
+          {assignableRoles(rd).map((r) => (
+            <button key={r.key} type="button"
+              className={`seg-btn ${roles.includes(r.key) ? 'on' : ''}`}
+              style={roles.includes(r.key)
                 ? { background: colorVar(color), borderColor: colorVar(color) } : undefined}
-              onClick={() => toggleRole(r.value)}>
+              onClick={() => toggleRole(r.key)}>
               {r.label}
             </button>
           ))}

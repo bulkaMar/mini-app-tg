@@ -10,7 +10,7 @@ from sqlalchemy import case, func, select
 
 from ..db import SessionMaker
 from ..models import (
-    BudgetItem, Expense, ExpenseSheet, Message, Risk, Task, TaskCategory, TaskItem,
+    BudgetItem, Expense, ExpenseSheet, Message, Risk, Role, Task, TaskCategory, TaskItem,
     TaskPriority, User,
 )
 
@@ -110,6 +110,13 @@ async def _fingerprints(session) -> dict[int | None, str]:
             ExpenseSheet.workspace_id, func.count(),
             func.coalesce(func.sum(func.length(ExpenseSheet.name)), 0),
         ).group_by(ExpenseSheet.workspace_id)
+    )).all())
+
+    merge((await session.execute(
+        select(
+            Role.workspace_id, func.count(),
+            func.coalesce(func.sum(func.length(Role.label)), 0),
+        ).group_by(Role.workspace_id)
     )).all())
 
     return {ws: "-".join(parts) for ws, parts in acc.items()}

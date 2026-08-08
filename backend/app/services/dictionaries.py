@@ -90,7 +90,7 @@ async def priority_keys(session: AsyncSession, workspace_id: int | None) -> set[
 async def usable_categories(session: AsyncSession, user: User) -> list[str]:
     """Розділи, у які людина може класти задачі — у порядку відображення."""
     rows = await all_categories(session, user.workspace_id)
-    if user.role == "owner":
+    if getattr(user, "base_role", user.role) == "owner":
         return [c.key for c in rows]
     return [c.key for c in rows if user.role in (c.roles or [])]
 
@@ -107,7 +107,7 @@ async def _assigned_categories(session: AsyncSession, user: User) -> set[str]:
 
 async def visible_categories(session: AsyncSession, user: User) -> set[str]:
     """Що людина бачить у списках: свої розділи + розділи доручених їй задач."""
-    if user.role == "owner":
+    if getattr(user, "base_role", user.role) == "owner":
         return {c.key for c in await all_categories(session, user.workspace_id)}
     return set(await usable_categories(session, user)) | await _assigned_categories(session, user)
 

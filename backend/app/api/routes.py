@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..classifier import classify, plan_tasks
 from ..config import settings
 from ..models import (
-    BudgetItem, Expense, ExpenseSheet, Message, Risk, Task, TaskCategory, TaskItem,
-    TaskPriority, User, Workspace,
+    BudgetItem, Expense, ExpenseSheet, Message, Risk, Role, Task, TaskCategory,
+    TaskItem, TaskPriority, User, Workspace,
 )
 from ..services.dictionaries import (
     all_categories,
@@ -31,6 +31,13 @@ from ..services.finance import (
     visible_sheet_ids,
 )
 from ..services.notify import route_notifications
+from ..services.roles import (
+    BASES,
+    all_roles,
+    members_with_role,
+    new_role_key,
+    role_labels,
+)
 from ..services.saver import (
     parse_due,
     parse_due_at,
@@ -40,7 +47,7 @@ from ..services.saver import (
     save_classified,
     save_owner_task,
 )
-from ..services.status import ROLE_LABELS, compute_dashboard, monthly_budget
+from ..services.status import compute_dashboard, monthly_budget
 from ..services.transcribe import transcribe
 from .auth import InitDataError, validate_init_data
 from .deps import allowed_categories, get_current_user, get_session, require_owner
@@ -90,6 +97,12 @@ async def _items_by_task(
             {"id": r.id, "kind": r.kind, "text": r.text, "done": r.done}
         )
     return out
+
+
+async def _visible_role_keys(session: AsyncSession, user: User) -> set[str]:
+    """Ролі, яким можна відкрити розділ (роль власниці не перелічуємо — вона
+    бачить усе завжди)."""
+    return {r.key for r in await all_roles(session, user.workspace_id) if r.base != "owner"}
 
 
 async def _check_task_category(session: AsyncSession, user: User, key: str) -> None:
@@ -168,7 +181,9 @@ async def me(
         "name": user.name,
         "username": user.username,
         "role": user.role,
-        "role_label": ROLE_LABELS.get(user.role, user.role),
+        "role_label": (await role_labels(session, user.workspace_id)).get(user.role, user.role),
+        # яким екраном користуватись, поки немає тумблерів розділів (0.5–0.7)
+        "base": getattr(user, "base_role", user.role),
         "permissions": user.permissions or {},
         # у які розділи ця людина може класти задачі — з цього фронт будує вибір
         "task_categories": await usable_categories(session, user),
@@ -198,11 +213,12 @@ async def feed(
         cats = allowed_categories(user) | await visible_categories(session, user)
         q = q.where(Message.category.in_(cats))
     rows = (await session.execute(q)).scalars().all()
+    labels = await role_labels(session, user.workspace_id)
     return [
         {
             "id": m.id,
             "role": m.sender_role,
-            "role_label": ROLE_LABELS.get(m.sender_role, m.sender_role),
+            "role_label": labels.get(m.sender_role, m.sender_role),
             "target_role": m.target_role or resolve_target_role(m.sender_role, m.category),
             "type": m.classified_type,
             "category": m.category,
@@ -271,7 +287,7 @@ async def create_category(
         label=label,
         icon=body.icon or "task",
         color=body.color if body.color in COLORS else "orange",
-        roles=[r for r in body.roles if r in ("manager", "assistant", "driver")],
+        roles=[r for r in body.roles if r in await _visible_role_keys(session, user)],
         is_system=False,
         sort=max((c.sort for c in rows), default=100) + 10,
     )
@@ -300,7 +316,8 @@ async def update_category(
     if body.get("color") in COLORS:
         cat.color = body["color"]
     if isinstance(body.get("roles"), list):
-        cat.roles = [r for r in body["roles"] if r in ("manager", "assistant", "driver")]
+        valid = await _visible_role_keys(session, user)
+        cat.roles = [r for r in body["roles"] if r in valid]
     await session.commit()
     return {"ok": True}
 
@@ -440,6 +457,117 @@ async def delete_priority(
         update(Task).where(Task.priority == prio.key).values(priority=fallback)
     )
     await session.delete(prio)
+    await session.commit()
+    return {"ok": True}
+
+
+# ---------- ролі ----------
+# Ролі — дані простору. Читати може будь-хто (без підписів не намалювати
+# бейджі), змінювати — тільки власниця.
+
+
+def _role_out(r: Role, used: int) -> dict:
+    return {
+        "id": r.id, "key": r.key, "label": r.label, "color": r.color,
+        "base": r.base, "is_system": r.is_system, "members": used,
+    }
+
+
+@router.get("/roles")
+async def roles(
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+) -> dict:
+    rows = await all_roles(session, user.workspace_id)
+    counts = dict((await session.execute(
+        select(User.role, func.count()).where(User.workspace_id == user.workspace_id).group_by(User.role)
+    )).all())
+    return {
+        "roles": [_role_out(r, counts.get(r.key, 0)) for r in rows],
+        "can_manage": getattr(user, "base_role", user.role) == "owner",
+    }
+
+
+class RoleIn(BaseModel):
+    label: str
+    color: str = "muted"
+    base: str = "assistant"
+
+
+@router.post("/roles")
+async def create_role(
+    body: RoleIn,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    label = body.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Назва ролі не може бути порожньою")
+    rows = await all_roles(session, user.workspace_id)
+    if any(r.label.lower() == label.lower() for r in rows):
+        raise HTTPException(status_code=409, detail="Роль із такою назвою вже є")
+    base = body.base if body.base in ("manager", "assistant", "driver") else "assistant"
+    role = Role(
+        workspace_id=user.workspace_id,
+        key=await new_role_key(session, user.workspace_id),
+        label=label,
+        color=body.color if body.color in COLORS else "muted",
+        base=base,
+        is_system=False,
+        sort=max((r.sort for r in rows), default=100) + 10,
+    )
+    session.add(role)
+    await session.commit()
+    return {"id": role.id, "key": role.key, "ok": True}
+
+
+@router.patch("/roles/{role_id}")
+async def update_role(
+    role_id: int,
+    body: dict,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    role = (await session.execute(select(Role).where(
+        Role.id == role_id, Role.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=404)
+    if isinstance(body.get("label"), str) and body["label"].strip():
+        role.label = body["label"].strip()
+    if body.get("color") in COLORS:
+        role.color = body["color"]
+    # у власника «поводиться як» не міняємо — це єдина роль із повними правами
+    if body.get("base") in ("manager", "assistant", "driver") and role.base != "owner":
+        role.base = body["base"]
+    await session.commit()
+    return {"ok": True}
+
+
+@router.delete("/roles/{role_id}")
+async def delete_role(
+    role_id: int,
+    user: User = Depends(require_owner),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Роль із людьми не видаляємо: спершу треба перевести їх на іншу."""
+    role = (await session.execute(select(Role).where(
+        Role.id == role_id, Role.workspace_id == user.workspace_id
+    ))).scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=404)
+    if role.is_system:
+        raise HTTPException(
+            status_code=409,
+            detail="Це базова роль — на ній тримається роздача задач і сповіщення. "
+                   "Її можна перейменувати, але не видалити",
+        )
+    used = await members_with_role(session, user.workspace_id, role.key)
+    if used:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Цю роль має людей: {used}. Спершу переведіть їх на іншу роль",
+        )
+    await session.delete(role)
     await session.commit()
     return {"ok": True}
 
@@ -982,6 +1110,17 @@ async def set_budget(
 
 # ---------- team (owner) ----------
 
+
+async def _check_member_role(session: AsyncSession, user: User, key: str) -> None:
+    """Роль має існувати в цьому просторі й не бути роллю власниці."""
+    rows = {r.key: r for r in await all_roles(session, user.workspace_id)}
+    role = rows.get(key)
+    if role is None:
+        raise HTTPException(status_code=400, detail="Такої ролі немає")
+    if role.base == "owner":
+        raise HTTPException(status_code=403, detail="Роль власниці не призначається")
+
+
 class MemberIn(BaseModel):
     username: str
     name: str = ""
@@ -1000,13 +1139,14 @@ async def team(
             select(User).where(User.workspace_id == user.workspace_id).order_by(User.created_at.asc())
         )
     ).scalars().all()
+    labels = await role_labels(session, user.workspace_id)
     return [
         {
             "id": u.id,
             "name": u.name,
             "username": u.username,
             "role": u.role,
-            "role_label": ROLE_LABELS.get(u.role, u.role),
+            "role_label": labels.get(u.role, u.role),
             "status": u.status,
             "permissions": u.permissions or {},
             "employment": u.employment or "permanent",
@@ -1022,8 +1162,7 @@ async def invite_member(
     user: User = Depends(require_owner),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    if body.role not in ("manager", "assistant", "driver"):
-        raise HTTPException(status_code=400, detail="bad role")
+    await _check_member_role(session, user, body.role)
     username = body.username.lstrip("@")
     valid = {s.id for s in await all_sheets(session, user.workspace_id)}
     temporary = body.employment == "temporary"
@@ -1068,7 +1207,8 @@ async def update_member(
             member.telegram_id = None
             member.status = "invited"
         member.username = new_username
-    if body.get("role") in ("manager", "assistant", "driver"):
+    if body.get("role") and body["role"] != member.role:
+        await _check_member_role(session, user, body["role"])
         member.role = body["role"]
     if isinstance(body.get("permissions"), dict):
         member.permissions = body["permissions"]

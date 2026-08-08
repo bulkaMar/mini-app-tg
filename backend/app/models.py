@@ -36,6 +36,25 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Role(Base):
+    """Ролі як дані. `base` — «поводиться як»: визначає екран і базові теми,
+    поки не зʼявились тумблери розділів по кожній людині (0.5–0.7).
+    Системні (власник/менеджер/асистент/водій) перейменовуються, але не
+    видаляються — на них тримається код роздачі задач і сповіщень."""
+
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    key: Mapped[str] = mapped_column(String(20), index=True)
+    label: Mapped[str] = mapped_column(String(60))
+    color: Mapped[str] = mapped_column(String(20), default="muted")
+    base: Mapped[str] = mapped_column(String(20), default="assistant")  # owner|manager|assistant|driver
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Message(Base):
     """Лог усіх сирих вхідних — історія/контекст."""
 

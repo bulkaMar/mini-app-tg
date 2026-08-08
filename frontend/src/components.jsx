@@ -120,6 +120,39 @@ export function useSheets() {
 }
 export const refreshSheets = loadSheets
 
+/* ---------- ролі: той самий спільний кеш ---------- */
+let _roles = { roles: [], can_manage: false, loaded: false }
+let _rolesLoaded = false
+const _roleSubs = new Set()
+
+async function loadRoles() {
+  try {
+    const d = await get('/api/roles')
+    if (d && Array.isArray(d.roles)) _roles = { ...d, loaded: true }
+    else return
+  } catch {
+    _roles = { ..._roles, loaded: true }
+  }
+  _rolesLoaded = true
+  _roleSubs.forEach((fn) => { try { fn(_roles) } catch { /* ok */ } })
+}
+
+export function useRoles() {
+  const [d, setD] = useState(_roles)
+  useEffect(() => {
+    _roleSubs.add(setD)
+    if (!_rolesLoaded) loadRoles()
+    const off = onLiveChange(loadRoles)
+    return () => { _roleSubs.delete(setD); off() }
+  }, [])
+  return d
+}
+export const refreshRoles = loadRoles
+
+export const findRole = (rd, key) => rd?.roles?.find((r) => r.key === key)
+// ролі, які можна призначити людині (роль власниці не роздається)
+export const assignableRoles = (rd) => (rd?.roles || []).filter((r) => r.base !== 'owner')
+
 export const findCat = (dict, key) => dict?.categories?.find((c) => c.key === key)
 export const findPrio = (dict, key) => dict?.priorities?.find((p) => p.key === key)
 // варіанти для Segmented: тільки ті розділи, куди цій людині можна класти задачі
@@ -158,7 +191,8 @@ const ROLE_NAME = { owner: 'Власник', manager: 'Менеджер', assist
 function whoName(role, meRole) {
   if (!role) return ''
   if (role === meRole) return meRole === 'owner' ? 'Ти' : 'Я'
-  return ROLE_NAME[role] || role
+  // назву власної ролі беремо з довідника (кеш тримає App), інакше — запасну
+  return _roles.roles.find((r) => r.key === role)?.label || ROLE_NAME[role] || role
 }
 export function directionLabel(e, meRole) {
   const from = whoName(e.role, meRole)

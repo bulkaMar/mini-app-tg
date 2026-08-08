@@ -21,7 +21,8 @@ from ..db import SessionMaker
 from ..models import Expense, Risk, User
 from ..services.notify import route_notifications
 from ..services.saver import save_classified
-from ..services.status import ROLE_LABELS, compute_dashboard
+from ..services.roles import role_labels
+from ..services.status import compute_dashboard
 from ..services.transcribe import transcribe
 
 log = logging.getLogger(__name__)
@@ -51,11 +52,13 @@ def _webapp_kb() -> InlineKeyboardMarkup:
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db_user: User) -> None:
+    async with SessionMaker() as session:
+        labels = await role_labels(session, db_user.workspace_id)
     await message.answer(
         f"Привіт, {db_user.name or 'друже'}! Це CanniBot.\n\n"
         "Надиктуй голосове або напиши текстом — я розкладу по полицях "
         "(задача / тривога / витрата) і збережу.\n\n"
-        f"Твоя роль: <b>{ROLE_LABELS.get(db_user.role, db_user.role)}</b>",
+        f"Твоя роль: <b>{labels.get(db_user.role, db_user.role)}</b>",
         reply_markup=_webapp_kb(),
         parse_mode="HTML",
     )

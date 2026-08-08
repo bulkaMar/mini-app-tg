@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import SessionMaker
 from ..models import User
+from ..services.roles import base_of
 from ..services.workspace import get_or_create_workspace
 from .auth import InitDataError, validate_init_data
 
@@ -116,7 +117,9 @@ async def get_current_user(
         init_data = authorization[4:]
     if not init_data:
         if settings.dev_auth:
-            return await _get_dev_user(session, x_dev_role or "owner")
+            u = await _get_dev_user(session, x_dev_role or "owner")
+            u.base_role = await base_of(session, u)
+            return u
         raise HTTPException(status_code=401, detail="initData required")
 
     try:
@@ -134,15 +137,18 @@ async def get_current_user(
         user = await _provision_user(session, tg_id, tg_user)
     if user is None or user.status != "active":
         raise HTTPException(status_code=403, detail="not whitelisted")
+    user.base_role = await base_of(session, user)  # тимчасове поле, у БД не пишеться
     return user
 
 
 def require_owner(user: User = Depends(get_current_user)) -> User:
-    if user.role != "owner":
+    if getattr(user, "base_role", user.role) != "owner":
         raise HTTPException(status_code=403, detail="owner only")
     return user
 
 
 def allowed_categories(user: User) -> set[str]:
-    """Базові теми для стрічки й фінансів. Розділи задач — у dictionaries.py (БД)."""
-    return ROLE_CATEGORIES.get(user.role, set())
+    """Базові теми для стрічки й фінансів. Розділи задач — у dictionaries.py (БД).
+    Спираємось на base_role: у власної ролі («Фотограф») своя назва, але
+    поводиться вона як одна з чотирьох базових."""
+    return ROLE_CATEGORIES.get(getattr(user, "base_role", None) or user.role, set())

@@ -57,7 +57,7 @@ def finance_perms(user: User) -> dict:
 async def visible_sheet_ids(session: AsyncSession, user: User) -> list[int]:
     """Листи, які людині відкриті — у порядку відображення."""
     sheets = await all_sheets(session, user.workspace_id)
-    if user.role == "owner":
+    if getattr(user, "base_role", user.role) == "owner":
         return [s.id for s in sheets]
     perms = finance_perms(user)
     if perms.get("scope", "all") == "all":
@@ -68,7 +68,7 @@ async def visible_sheet_ids(session: AsyncSession, user: User) -> list[int]:
 
 def visible_from(user: User) -> datetime | None:
     """З якого моменту людині видно записи. Постійним — без обмеження."""
-    if user.role == "owner" or user.employment != "temporary":
+    if getattr(user, "base_role", user.role) == "owner" or user.employment != "temporary":
         return None
     return user.visible_from
 

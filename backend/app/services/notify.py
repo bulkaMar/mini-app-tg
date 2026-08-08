@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..models import User, Workspace
-from .status import ROLE_LABELS
+from .roles import role_labels
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,8 @@ async def route_notifications(session: AsyncSession, sender: User, c) -> None:
         return
 
     ws_id = sender.workspace_id
-    sender_label = ROLE_LABELS.get(sender.role, sender.role).capitalize()
+    labels = await role_labels(session, sender.workspace_id)
+    sender_label = labels.get(sender.role, sender.role).capitalize()
     prefix = "🚨 " if c.type == "risk" else ""
     body = f"{prefix}{sender_label}: {c.text}"
 

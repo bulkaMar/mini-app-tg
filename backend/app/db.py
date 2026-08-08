@@ -139,12 +139,14 @@ async def _seed_existing_workspaces() -> None:
     де їх ще немає (простори, створені до появи довідників). Ідемпотентно:
     у просторі з бодай одним записом нічого не чіпаємо, тож видалене не воскресає."""
     from .services.dictionaries import seed_dictionaries
+    from .services.roles import seed_roles
 
     try:
         async with SessionMaker() as session:
             ws_ids = (await session.execute(select(Workspace.id))).scalars().all()
             for ws_id in ws_ids:
                 await seed_dictionaries(session, ws_id)
+                await seed_roles(session, ws_id)
     except Exception:
         logging.warning("DB seed dictionaries skipped (гонка старту?)")
 
