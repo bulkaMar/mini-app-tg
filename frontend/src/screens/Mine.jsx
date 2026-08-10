@@ -8,6 +8,17 @@ import {
   CenterModal, ConfirmDialog, Header, Icons, fmtTime, useLiveSel, usePoll, useToast,
 } from '../components'
 
+/* У списку показуємо тільки перший рядок як заголовок, решту — сірим натяком.
+   Обидва в один рядок із трикрапкою, щоб довгий запис не розпирав список. */
+function splitNote(text) {
+  const lines = String(text || '').split('\n')
+  const i = lines.findIndex((l) => l.trim())
+  return {
+    title: i >= 0 ? lines[i].trim() : '',
+    rest: lines.slice(i + 1).join(' ').replace(/\s+/g, ' ').trim(),
+  }
+}
+
 const KINDS = [
   {
     key: 'note',
@@ -136,22 +147,27 @@ export default function Mine() {
 
       {!notes && <div className="loading">Завантаження…</div>}
       {notes && notes.length === 0 && <div className="empty">{cfg.empty}</div>}
-      {notes && notes.map((n) => (
-        <div key={n.id} className={`note-row ${n.done ? 'done' : ''}`}>
-          <button type="button" className="ti-tick" aria-label={n.done ? 'Зняти' : 'Готово'}
-            style={n.done ? { background: 'var(--orange)', borderColor: 'var(--orange)' } : undefined}
-            onClick={() => toggle(n)}>
-            {n.done ? Icons.check(13) : null}
-          </button>
-          <span className="note-text" role="button" tabIndex={0} onClick={() => setSel(n)}>
-            {n.text}
-            <span className="row-sub">{fmtTime(n.time)}</span>
-          </span>
-          <button className="btn-icon" aria-label="Змінити" onClick={() => setSel(n)}>
-            {Icons.pencil(15)}
-          </button>
-        </div>
-      ))}
+      {notes && notes.map((n) => {
+        const { title, rest } = splitNote(n.text)
+        return (
+          <div key={n.id} className={`note-row ${n.done ? 'done' : ''}`}>
+            <button type="button" className="ti-tick" aria-label={n.done ? 'Зняти' : 'Готово'}
+              style={n.done ? { background: 'var(--orange)', borderColor: 'var(--orange)' } : undefined}
+              onClick={() => toggle(n)}>
+              {n.done ? Icons.check(13) : null}
+            </button>
+            <span className="note-text" role="button" tabIndex={0} onClick={() => setSel(n)}>
+              <span className="note-title">{title}</span>
+              <span className="note-preview">
+                {fmtTime(n.time)}{rest ? ` · ${rest}` : ''}
+              </span>
+            </span>
+            <button className="btn-icon" aria-label="Відкрити" onClick={() => setSel(n)}>
+              {Icons.pencil(15)}
+            </button>
+          </div>
+        )
+      })}
 
       <button className="btn-dashed" style={{ color: 'var(--orange)' }} onClick={() => setSel('new')}>
         {Icons.plus(18)} {cfg.add}
