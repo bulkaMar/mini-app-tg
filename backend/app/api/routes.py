@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, true as True_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..classifier import classify, plan_tasks
@@ -23,11 +23,11 @@ from ..services.dictionaries import (
     usable_categories,
     visible_categories,
 )
+from ..services.access import access_expired, parse_access_hours, visible_since
 from ..services.finance import (
     all_sheets,
     general_sheet_id,
     normalize_finance_perms,
-    visible_from,
     visible_sheet_ids,
 )
 from ..services.notify import route_notifications
@@ -201,9 +201,13 @@ async def feed(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
     """Стрічка повідомлень: owner — усі, інші — тільки свої категорії."""
+    where = [Message.workspace_id == user.workspace_id]
+    since = visible_since(user)  # тимчасовому старий архів закритий
+    if since is not None:
+        where.append(Message.created_at >= since)
     q = (
         select(Message)
-        .where(Message.workspace_id == user.workspace_id)
+        .where(*where)
         .order_by(Message.created_at.desc())
         .limit(30)
     )
@@ -584,23 +588,38 @@ class TaskIn(BaseModel):
     text: str
     due: str | None = None
     priority: str = "normal"
+    assignee: str | None = None   # роль виконавця; не вказано — задача твоя
     items: list[TaskItemIn] = []
 
 
 @router.get("/tasks")
 async def list_tasks(
     category: str | None = None,
+    assignee: str | None = None,
+    status: str | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
+    """Фільтри за категорією, людиною (роллю виконавця) і станом — точні збіги,
+    тож рахуємо їх у запиті. Фільтр за датою лишається на клієнті: дедлайн
+    зберігається «настінним» часом, а який зараз день — знає лише пристрій."""
     cats = await visible_categories(session, user)
+    conds = []
     if category:
         if category not in cats:
             raise HTTPException(status_code=403, detail="category not allowed for your role")
-        where = Task.category == category
+        conds.append(Task.category == category)
     else:
         # видно розділи своєї ролі + усе, що доручено особисто тобі в чужому розділі
-        where = or_(Task.category.in_(cats), Task.owner_role == user.role)
+        conds.append(or_(Task.category.in_(cats), Task.owner_role == user.role))
+    if assignee:
+        conds.append(Task.owner_role == assignee)
+    if status in ("open", "done"):
+        conds.append(Task.status == status)
+    since = visible_since(user)  # тимчасовому старий архів закритий
+    if since is not None:
+        conds.append(Task.created_at >= since)
+    where = and_(*conds)
     # порядок важливості беремо з довідника (rank); рівень міг зникнути → у кінець
     q = (
         select(Task)
@@ -615,7 +634,7 @@ async def list_tasks(
             func.coalesce(TaskPriority.rank, 1000),
             Task.created_at.desc(),
         )
-        .limit(100)
+        .limit(200)  # фільтри звужують вибірку, але запас потрібен для фільтра за датою
     )
     rows = (await session.execute(q)).scalars().all()
     items = await _items_by_task(session, [t.id for t in rows], user.workspace_id)
@@ -646,6 +665,14 @@ async def create_task(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     await _check_task_category(session, user, body.category)
+    # кому доручено. Роздавати іншим може лише власниця; решта створює задачі собі
+    owner_role = user.role
+    if body.assignee and body.assignee != user.role:
+        if getattr(user, "base_role", user.role) != "owner":
+            raise HTTPException(status_code=403, detail="Роздавати задачі може лише власниця")
+        if body.assignee not in {r.key for r in await all_roles(session, user.workspace_id)}:
+            raise HTTPException(status_code=400, detail="Такої ролі немає")
+        owner_role = body.assignee
     prios = await priority_keys(session, user.workspace_id)
     due_at, time_set = parse_due_at(body.due)
     task = Task(
@@ -653,7 +680,7 @@ async def create_task(
         telegram_id=user.telegram_id,
         category=body.category,
         text=body.text,
-        owner_role=user.role,
+        owner_role=owner_role,
         priority=body.priority if body.priority in prios else await default_priority_key(session, user.workspace_id),
         due=parse_due(body.due),
         due_at=due_at,
@@ -712,10 +739,15 @@ async def update_task(
 async def list_risks(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
+    since = visible_since(user)  # тимчасовому старий архів закритий
     rows = (
         await session.execute(
             select(Risk)
-            .where(Risk.workspace_id == user.workspace_id, Risk.deleted_at.is_(None))
+            .where(
+                Risk.workspace_id == user.workspace_id,
+                Risk.deleted_at.is_(None),
+                Risk.created_at >= since if since is not None else True_(),
+            )
             .order_by(Risk.resolved.asc(), Risk.created_at.desc())
             .limit(50)
         )
@@ -897,7 +929,7 @@ async def money(
 ) -> dict:
     """Витрати обраного листа (або всіх доступних, якщо лист не вказано)."""
     sheet_ids, selected = await _resolve_sheet(session, user, sheet)
-    since = visible_from(user)  # тимчасовий бачить лише з дня, коли його додали
+    since = visible_since(user)  # тимчасовий бачить лише з дня, коли його додали
 
     base = [
         Expense.workspace_id == user.workspace_id,
@@ -1127,6 +1159,7 @@ class MemberIn(BaseModel):
     employment: str = "permanent"          # permanent | temporary
     finance_scope: str = "all"             # all | sheets
     finance_sheets: list[int] = []
+    access_hours: int = 0                  # 0 = безстроково
 
 
 @router.get("/team")
@@ -1150,6 +1183,8 @@ async def team(
             "permissions": u.permissions or {},
             "employment": u.employment or "permanent",
             "visible_from": u.visible_from.isoformat() if u.visible_from else None,
+            "access_until": u.access_until.isoformat() if u.access_until else None,
+            "access_expired": access_expired(u),
         }
         for u in rows
     ]
@@ -1171,6 +1206,7 @@ async def invite_member(
         employment="temporary" if temporary else "permanent",
         # тимчасовий бачить лише те, що зʼявилось після його додавання
         visible_from=datetime.now(timezone.utc) if temporary else None,
+        access_until=parse_access_hours(body.access_hours),
         permissions={
             "finance": normalize_finance_perms(body.finance_scope, body.finance_sheets, valid)
         },
@@ -1218,6 +1254,9 @@ async def update_member(
             member.visible_from = datetime.now(timezone.utc)
         if body["employment"] == "permanent":
             member.visible_from = None  # постійному відкривається лист цілком
+    if "access_hours" in body:
+        # 0 (або порожньо) — зняти строк; інакше відлік починається від зараз
+        member.access_until = parse_access_hours(body["access_hours"])
     if "finance_scope" in body or "finance_sheets" in body:
         valid = {s.id for s in await all_sheets(session, user.workspace_id)}
         perms = dict(member.permissions or {})

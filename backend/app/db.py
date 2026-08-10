@@ -40,6 +40,7 @@ _ADD_COLUMNS = [
     ("budget_items", "sheet_id", "INTEGER"),
     ("users", "employment", "VARCHAR(10)"),
     ("users", "visible_from", "TIMESTAMP"),
+    ("users", "access_until", "TIMESTAMP"),
     # workspaces (мультитенантність): кожна таблиця даних отримує workspace_id
     ("users", "workspace_id", "INTEGER"),
     ("messages", "workspace_id", "INTEGER"),

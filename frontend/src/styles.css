@@ -199,6 +199,27 @@ html, body {
 .prio { display: flex; align-items: center; flex-shrink: 0; }
 .prio-dot { width: 9px; height: 9px; border-radius: 50%; display: block; }
 
+/* ---------- фільтри задач ---------- */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.filter { display: flex; flex-direction: column; gap: 4px; flex: 1 1 30%; min-width: 0; }
+.filter-label {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding-left: 2px;
+}
+.filter select {
+  width: 100%; min-width: 0; box-sizing: border-box;
+  background: var(--card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 10px 8px; font-size: 13px; font-weight: 600; font-family: inherit;
+  color: var(--ink); outline: none; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.filter-reset {
+  display: flex; align-items: center; gap: 5px;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: var(--red); font-size: 13px; font-weight: 700; padding: 10px 4px;
+}
+.filter-reset:active { transform: scale(0.95); }
+
 /* ---------- вибір листа витрат ---------- */
 .sheet-picker {
   display: flex; align-items: center; gap: 9px;

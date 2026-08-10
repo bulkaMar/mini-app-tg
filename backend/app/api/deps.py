@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import settings
 from ..db import SessionMaker
 from ..models import User
+from ..services.access import access_expired
 from ..services.roles import base_of
 from ..services.workspace import get_or_create_workspace
 from .auth import InitDataError, validate_init_data
@@ -138,6 +139,11 @@ async def get_current_user(
     if user is None or user.status != "active":
         raise HTTPException(status_code=403, detail="not whitelisted")
     user.base_role = await base_of(session, user)  # тимчасове поле, у БД не пишеться
+    if access_expired(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Строк доступу закінчився. Попросіть власницю продовжити",
+        )
     return user
 
 

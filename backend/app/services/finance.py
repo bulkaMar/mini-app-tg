@@ -9,12 +9,11 @@
 із дня, коли його додали (visible_from). Постійний бачить лист цілком.
 """
 
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import ExpenseSheet, User
+from .access import is_owner
 
 GENERAL_SHEET_NAME = "Загальний бюджет"
 
@@ -57,20 +56,13 @@ def finance_perms(user: User) -> dict:
 async def visible_sheet_ids(session: AsyncSession, user: User) -> list[int]:
     """Листи, які людині відкриті — у порядку відображення."""
     sheets = await all_sheets(session, user.workspace_id)
-    if getattr(user, "base_role", user.role) == "owner":
+    if is_owner(user):
         return [s.id for s in sheets]
     perms = finance_perms(user)
     if perms.get("scope", "all") == "all":
         return [s.id for s in sheets]
     allowed = {int(x) for x in (perms.get("sheets") or []) if str(x).isdigit() or isinstance(x, int)}
     return [s.id for s in sheets if s.id in allowed]
-
-
-def visible_from(user: User) -> datetime | None:
-    """З якого моменту людині видно записи. Постійним — без обмеження."""
-    if getattr(user, "base_role", user.role) == "owner" or user.employment != "temporary":
-        return None
-    return user.visible_from
 
 
 def normalize_finance_perms(scope: str | None, sheet_ids, valid_ids: set[int]) -> dict:

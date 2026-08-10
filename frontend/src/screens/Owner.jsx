@@ -7,6 +7,7 @@ import {
   useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
 import Settings from './Settings'
+import AllTasks from './AllTasks'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
@@ -28,10 +29,26 @@ const FINANCE_SCOPE = [
   { value: 'all', label: 'Усі листи' },
   { value: 'sheets', label: 'Вибрані' },
 ]
+const ACCESS_PERIODS = [
+  { value: 0, label: 'Безстроково' },
+  { value: 12, label: '12 годин' },
+  { value: 24, label: 'Доба' },
+  { value: 72, label: '3 доби' },
+  { value: 168, label: 'Тиждень' },
+]
+// «до 12.08, 14:30» для підпису в списку команди
+const untilLabel = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const p2 = (n) => String(n).padStart(2, '0')
+  return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}, ${p2(d.getHours())}:${p2(d.getMinutes())}`
+}
 
 /* Зайнятість + які листи витрат людині відкриті. Використовується і при
    додаванні, і при редагуванні учасника. */
-function AccessFields({ employment, setEmployment, scope, setScope, picked, setPicked }) {
+function AccessFields({
+  employment, setEmployment, scope, setScope, picked, setPicked, hours, setHours, until,
+}) {
   const { sheets } = useSheets()
   const toggle = (id) =>
     setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id])
@@ -44,6 +61,16 @@ function AccessFields({ employment, setEmployment, scope, setScope, picked, setP
           {employment === 'temporary'
             ? 'Бачитиме лише те, що зʼявиться з дня, коли ви його додали'
             : 'Бачитиме відкриті листи цілком, разом зі старими записами'}
+        </div>
+      </Field>
+      <Field label="Строк доступу">
+        <Segmented options={ACCESS_PERIODS} value={hours} onChange={setHours} />
+        <div className="due-hint">
+          {hours === 0
+            ? 'Вхід працює, доки ви самі не приберете людину'
+            : until
+              ? `Зараз вхід діє до ${untilLabel(until)}. Новий строк почнеться від моменту збереження`
+              : 'Відлік почнеться від моменту збереження, потім вхід анулюється сам'}
         </div>
       </Field>
       <Field label="Доступ до фінансів">
@@ -99,6 +126,7 @@ export default function Owner({ me }) {
   // будь-який інший `view` — це ключ власного розділу власниці
   const drilldown =
     view === 'settings' ? <Settings onBack={back} /> :
+    view === 'alltasks' ? <AllTasks onBack={back} /> :
     view === 'production' ? <Projects onBack={back} /> :
     view === 'life' ? <Life onBack={back} /> :
     view === 'logistics' ? <Logistics onBack={back} /> :
@@ -183,6 +211,15 @@ function Home({ openView }) {
       <Meter title="Темп" value={LOAD_LABEL[d.load]} pct={LOAD_PCT[d.load]}
         level={d.load === 'LOW' ? 'low' : d.load === 'MED' ? 'med' : 'high'} />
 
+      <button className="nav-row" onClick={() => openView('alltasks')}>
+        <span className="ico">{Icons.task(20)}</span>
+        <span className="grow">
+          Усі задачі
+          <span className="row-sub">з фільтрами за категорією, людиною й датою</span>
+        </span>
+        <span className="chev">›</span>
+      </button>
+
       {/* налаштування — окремим підписаним рядком: іконкою в шапці її не було
           видно, бо той кут займає дзвіночок */}
       <button className="nav-row" onClick={() => openView('settings')}>
@@ -223,6 +260,7 @@ function Team() {
   const [employment, setEmployment] = useState('permanent')
   const [scope, setScope] = useState('all')
   const [picked, setPicked] = useState([])
+  const [hours, setHours] = useState(0)
   const [toast, showToast] = useToast()
 
   const rd = useRoles()
@@ -234,7 +272,7 @@ function Team() {
     try {
       await post('/api/team', {
         username: username.trim(), name: name.trim(), role,
-        employment, finance_scope: scope, finance_sheets: picked,
+        employment, finance_scope: scope, finance_sheets: picked, access_hours: hours,
       })
       setAdding(false); setUsername(''); setName('')
       showToast('Запрошення надіслано', 'ok')
@@ -251,7 +289,7 @@ function Team() {
     .map((r) => ({ value: r.key, label: r.label }))
   const openAdd = () => {
     setRole(freeRoles[0]?.value || ''); setUsername(''); setName('')
-    setEmployment('permanent'); setScope('all'); setPicked([])
+    setEmployment('permanent'); setScope('all'); setPicked([]); setHours(0)
     setAdding(true)
   }
   const canInvite = username.trim() && name.trim() // кнопка активна лише коли заповнені поля
@@ -273,6 +311,9 @@ function Team() {
               <div className="uname">
                 {m.status === 'invited' ? 'запрошення надіслано' : m.role === 'owner' ? 'повний доступ' : m.username ? `@${m.username}` : ''}
                 {m.employment === 'temporary' && ' · тимчасовий'}
+                {m.access_expired
+                  ? ' · доступ закінчився'
+                  : m.access_until ? ` · до ${untilLabel(m.access_until)}` : ''}
               </div>
             </div>
             <span className={`badge ${m.status === 'invited' ? 'outline' : ''}`}
@@ -305,7 +346,8 @@ function Team() {
             {freeRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
           <AccessFields employment={employment} setEmployment={setEmployment}
-            scope={scope} setScope={setScope} picked={picked} setPicked={setPicked} />
+            scope={scope} setScope={setScope} picked={picked} setPicked={setPicked}
+            hours={hours} setHours={setHours} />
           <button className="btn-primary" style={{ background: 'var(--orange)', opacity: canInvite ? 1 : 0.45 }}
             disabled={!canInvite} onClick={invite}>
             Додати учасника
@@ -330,6 +372,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
   const [employment, setEmployment] = useState(m.employment || 'permanent')
   const [scope, setScope] = useState(fin.scope || 'all')
   const [picked, setPicked] = useState(fin.sheets || [])
+  const [hours, setHours] = useState(0)   // 0 = не чіпати наявний строк
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
@@ -339,7 +382,8 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     role !== m.role ||
     employment !== (m.employment || 'permanent') ||
     scope !== (fin.scope || 'all') ||
-    JSON.stringify([...picked].sort()) !== JSON.stringify([...(fin.sheets || [])].sort())
+    JSON.stringify([...picked].sort()) !== JSON.stringify([...(fin.sheets || [])].sort()) ||
+    hours !== 0
 
   const save = async (extra = {}) => {
     if (busy) return
@@ -347,7 +391,8 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     try {
       await patch(`/api/team/${m.id}`, {
         name: name.trim(), username: username.trim(), role,
-        employment, finance_scope: scope, finance_sheets: picked, ...extra,
+        employment, finance_scope: scope, finance_sheets: picked,
+        ...(hours !== 0 ? { access_hours: hours } : {}), ...extra,
       })
       onChanged()
     } catch (e) { showToast(e.message, 'warn') } finally { setBusy(false) }
@@ -367,7 +412,14 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
         ))}
       </select>
       <AccessFields employment={employment} setEmployment={setEmployment}
-        scope={scope} setScope={setScope} picked={picked} setPicked={setPicked} />
+        scope={scope} setScope={setScope} picked={picked} setPicked={setPicked}
+        hours={hours} setHours={setHours} until={m.access_until} />
+      {m.access_expired && (
+        <div className="preview-meta" style={{ color: 'var(--red)' }}>
+          Строк доступу вичерпано — людина зараз не заходить. Оберіть новий строк,
+          щоб відкрити знову.
+        </div>
+      )}
       <button className="btn-primary" style={{ background: 'var(--orange)', opacity: changed ? 1 : 0.45 }}
         disabled={busy || !changed} onClick={() => save()}>
         {busy ? 'Зберігаю…' : 'Зберегти зміни'}

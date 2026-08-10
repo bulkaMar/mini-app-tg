@@ -615,6 +615,84 @@ export function Segmented({ options, value, onChange, color = 'var(--orange)' })
   )
 }
 
+/* ---------- фільтри задач: категорія · людина · дата · стан ----------
+   Категорія, людина і стан рахуються на сервері (точні збіги). Дата — тут:
+   дедлайн зберігається «настінним» часом, і який зараз день, знає лише пристрій. */
+export const DUE_FILTERS = [
+  { value: '', label: 'Будь-коли' },
+  { value: 'overdue', label: 'Прострочені' },
+  { value: 'today', label: 'Сьогодні' },
+  { value: 'week', label: 'Тиждень' },
+  { value: 'none', label: 'Без дедлайну' },
+]
+
+export function matchesDue(task, filter) {
+  if (!filter) return true
+  const m = dueMoment(task.due)
+  if (filter === 'none') return !m
+  if (!m) return false
+  if (filter === 'overdue') return task.status !== 'done' && m <= new Date()
+  const now = new Date()
+  const endToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+  if (filter === 'today') return m <= endToday
+  if (filter === 'week') return m <= new Date(endToday.getTime() + 6 * 86400000)
+  return true
+}
+
+/* Рядок фільтрів. `hideCategory` — на екрані однієї категорії вона зайва. */
+export function TaskFilters({ value, onChange, hideCategory }) {
+  const dict = useDictionaries()
+  const rd = useRoles()
+  const set = (k, v) => { haptic(); onChange({ ...value, [k]: v }) }
+  const active = Object.entries(value).filter(([k, v]) => v && k !== 'status').length
+
+  return (
+    <div className="filters">
+      {!hideCategory && (
+        <label className="filter">
+          <span className="filter-label">Категорія</span>
+          <select value={value.category || ''} onChange={(e) => set('category', e.target.value)}>
+            <option value="">Усі</option>
+            {(dict.categories || []).map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className="filter">
+        <span className="filter-label">Людина</span>
+        <select value={value.assignee || ''} onChange={(e) => set('assignee', e.target.value)}>
+          <option value="">Усі</option>
+          {(rd.roles || []).map((r) => (
+            <option key={r.key} value={r.key}>{r.label}</option>
+          ))}
+        </select>
+      </label>
+      <label className="filter">
+        <span className="filter-label">Дата</span>
+        <select value={value.due || ''} onChange={(e) => set('due', e.target.value)}>
+          {DUE_FILTERS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+        </select>
+      </label>
+      {active > 0 && (
+        <button className="filter-reset" onClick={() => { haptic(); onChange({ status: value.status }) }}>
+          {Icons.close(14)} Скинути
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* збирає ?category=&assignee=&status= для запиту (дата фільтрується вже тут) */
+export const taskQuery = (f) => {
+  const p = new URLSearchParams()
+  if (f.category) p.set('category', f.category)
+  if (f.assignee) p.set('assignee', f.assignee)
+  if (f.status) p.set('status', f.status)
+  const q = p.toString()
+  return q ? `?${q}` : ''
+}
+
 /* ---------- вибір листа витрат ----------
    «Усі листи» зʼявляється лише коли листів більше одного. */
 export const ALL_SHEETS = 'all'
@@ -895,6 +973,7 @@ export function ItemsBadge({ t }) {
    Одне вікно на всі екрани — розділи приходять із /api/me (що дозволено ролі). */
 export function NewTaskModal({
   defaultCategory,
+  canAssign = false,          // власниця може одразу доручити задачу комусь
   color = 'var(--orange)',
   title = 'Нова задача',
   placeholder = 'Що треба зробити',
@@ -902,6 +981,7 @@ export function NewTaskModal({
   onSaved,
 }) {
   const dict = useDictionaries()
+  const rd = useRoles()
   const cats = catOptions(dict)
   const prios = prioOptions(dict)
   const defPrio = dict.priorities?.find((p) => p.is_default)?.key || prios[prios.length - 1]?.value
@@ -911,6 +991,7 @@ export function NewTaskModal({
   const [priority, setPriority] = useState('')
   const [due, setDue] = useState('')      // «2026-08-10»
   const [dueTime, setDueTime] = useState('') // «14:30» або порожньо = на весь день
+  const [assignee, setAssignee] = useState('')  // порожньо = собі
   const [items, setItems] = useState([]) // підзадачі й чекліст — поки задачі немає, тримаємо тут
   const [busy, setBusy] = useState(false)
   const [toast, showToast] = useToast()
@@ -931,6 +1012,7 @@ export function NewTaskModal({
     try {
       await post('/api/tasks', {
         text: text.trim(), category, priority, due: joinDue(due, dueTime), items,
+        ...(assignee ? { assignee } : {}),
       })
       haptic('medium')
       onSaved()
@@ -959,6 +1041,14 @@ export function NewTaskModal({
       {prios.length > 1 && (
         <Field label="Важливість">
           <Segmented options={prios} value={priority} onChange={setPriority} color={color} />
+        </Field>
+      )}
+      {canAssign && (
+        <Field label="Кому">
+          <Segmented
+            options={[{ value: '', label: 'Собі' },
+              ...assignableRoles(rd).map((r) => ({ value: r.key, label: r.label }))]}
+            value={assignee} onChange={setAssignee} color={color} />
         </Field>
       )}
       <DueField date={due} time={dueTime} onChange={(d, t) => { setDue(d); setDueTime(t) }} />

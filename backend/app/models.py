@@ -33,6 +33,9 @@ class User(Base):
     # постійний бачить лист цілком; тимчасовий — лише те, що зʼявилось із visible_from
     employment: Mapped[str] = mapped_column(String(10), default="permanent")  # permanent|temporary
     visible_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # доки працює вхід; None — безстроково. Після цього моменту людина не заходить,
+    # але її дані та історія лишаються
+    access_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -102,10 +102,10 @@ export const MOCK = {
     ],
   },
   '/api/team': [
-    { id: 1, name: 'Ти', username: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {}, employment: 'permanent', visible_from: null },
+    { id: 1, name: 'Ти', username: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {}, employment: 'permanent', visible_from: null, access_until: null, access_expired: false },
     { id: 2, name: 'Марія К.', username: 'maria_pm', role: 'manager', role_label: 'менеджер', status: 'active', permissions: {} },
     { id: 3, name: 'Оля Л.', username: 'olya', role: 'assistant', role_label: 'асистент', status: 'active', permissions: {} },
-    { id: 4, name: 'Віктор Д.', username: 'viktor_d', role: 'driver', role_label: 'водій', status: 'invited', permissions: {} },
+    { id: 4, name: 'Віктор Д.', username: 'viktor_d', role: 'driver', role_label: 'водій', status: 'invited', permissions: {}, employment: 'temporary', visible_from: '2026-06-01T00:00:00', access_until: '2026-06-20T18:00:00', access_expired: false },
   ],
 }
 
