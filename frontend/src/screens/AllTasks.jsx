@@ -39,6 +39,12 @@ export default function AllTasks({ onBack }) {
       <Header icon="task" color="var(--orange)" title="Усі задачі"
         sub={`знайдено: ${shown.length}`} />
 
+      {/* основна кнопка вгорі — щоб додати задачу одразу, не гортаючи список */}
+      <button className="btn-primary" style={{ background: 'var(--orange)' }}
+        onClick={() => setAdding(true)}>
+        {Icons.plus(20)} Додати задачу
+      </button>
+
       <div className="seg">
         {STATUSES.map((st) => (
           <button key={st.value} type="button"
