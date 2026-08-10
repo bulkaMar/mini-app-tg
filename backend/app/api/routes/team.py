@@ -18,6 +18,7 @@ from ...services.finance import (
     normalize_finance_perms,
 )
 
+from ...services.permissions import fields_of, normalize as normalize_perms, sections_of
 from ...services.roles import (
     all_roles,
     role_labels,
@@ -54,6 +55,8 @@ class MemberIn(BaseModel):
     finance_scope: str = "all"             # all | sheets
     finance_sheets: list[int] = []
     access_hours: int = 0                  # 0 = безстроково
+    sections: dict = {}                    # розділ → full | list | none
+    fields: dict = {}                      # поле → чи показувати
 
 
 @router.get("/team")
@@ -79,6 +82,8 @@ async def team(
             "visible_from": u.visible_from.isoformat() if u.visible_from else None,
             "access_until": u.access_until.isoformat() if u.access_until else None,
             "access_expired": access_expired(u),
+            "sections": sections_of(u),
+            "fields": fields_of(u),
         }
         for u in rows
     ]
@@ -102,7 +107,8 @@ async def invite_member(
         visible_from=datetime.now(timezone.utc) if temporary else None,
         access_until=parse_access_hours(body.access_hours),
         permissions={
-            "finance": normalize_finance_perms(body.finance_scope, body.finance_sheets, valid)
+            "finance": normalize_finance_perms(body.finance_scope, body.finance_sheets, valid),
+            **normalize_perms(body.sections, body.fields),
         },
     )
     session.add(member)
@@ -151,6 +157,10 @@ async def update_member(
     if "access_hours" in body:
         # 0 (або порожньо) — зняти строк; інакше відлік починається від зараз
         member.access_until = parse_access_hours(body["access_hours"])
+    if "sections" in body or "fields" in body:
+        perms = dict(member.permissions or {})
+        perms.update(normalize_perms(body.get("sections"), body.get("fields")))
+        member.permissions = perms
     if "finance_scope" in body or "finance_sheets" in body:
         valid = {s.id for s in await all_sheets(session, user.workspace_id)}
         perms = dict(member.permissions or {})

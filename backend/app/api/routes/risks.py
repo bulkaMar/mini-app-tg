@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models import Risk, User
 from ...services.access import visible_since
+from ...services.permissions import require_section
 
 
 
@@ -31,6 +32,7 @@ router = APIRouter()
 async def list_risks(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
+    require_section(user, "risks")
     since = visible_since(user)  # тимчасовому старий архів закритий
     rows = (
         await session.execute(
@@ -66,6 +68,7 @@ async def resolve_risk(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_section(user, "risks")
     if user.role not in ("owner", "manager"):
         raise HTTPException(status_code=403)
     risk = (

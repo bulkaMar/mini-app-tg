@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
+import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, allowedTabs, fmtTime, money, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
 import Mine from './Mine'
 
 export default function Driver({ me }) {
@@ -11,16 +11,16 @@ export default function Driver({ me }) {
       <div className="app-scroll">
         {tab === 'shift' && <Shift me={me} />}
         {tab === 'trips' && <Trips me={me} />}
-        {tab === 'money' && <Money />}
+        {tab === 'money' && <Money me={me} />}
         {tab === 'mine' && <Mine />}
       </div>
       <TabBar
-        tabs={[
+        tabs={allowedTabs(me, [
           { key: 'shift', icon: 'truck', label: 'Зміна' },
-          { key: 'trips', icon: 'pin', label: 'Поїздки' },
-          { key: 'money', icon: 'fuel', label: 'Фінанси' },
+          { key: 'trips', icon: 'pin', label: 'Поїздки', section: 'tasks' },
+          { key: 'money', icon: 'fuel', label: 'Фінанси', section: 'finance' },
           { key: 'mine', icon: 'note', label: 'Моє' },
-        ]}
+        ])}
         active={tab}
         onChange={setTab}
       />
@@ -123,7 +123,7 @@ function Trips({ me }) {
   )
 }
 
-function Money() {
+function Money({ me }) {
   const [m, setM] = useState(null)
   const [sel, setSel] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -173,7 +173,7 @@ function Money() {
               )}
             </span>
           </div>
-          <div className="text">{e.text || 'Витрата'} · {Math.round(e.amount).toLocaleString('uk-UA')} ₴</div>
+          <div className="text">{e.text || 'Витрата'} · {money(e.amount)}</div>
           <div className="meta">{e.approved ? Icons.check(13) : Icons.clock(13)} {e.approved ? 'підтверджено' : 'чекає підтвердження'}</div>
           {e.comment && <div className="meta comment-line">{Icons.comment(13)} {e.comment}</div>}
         </div>

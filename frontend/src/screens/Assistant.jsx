@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
+import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, allowedTabs, fmtDue, isOverdue, money, seesSummary, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
 import Mine from './Mine'
 
 export default function Assistant({ me }) {
@@ -11,16 +11,16 @@ export default function Assistant({ me }) {
       <div className="app-scroll">
         {tab === 'life' && <Life me={me} category="life" />}
         {tab === 'dog' && <Life me={me} category="dog" />}
-        {tab === 'money' && <Money />}
+        {tab === 'money' && <Money me={me} />}
         {tab === 'mine' && <Mine />}
       </div>
       <TabBar
-        tabs={[
-          { key: 'life', icon: 'home', label: 'Побут' },
-          { key: 'dog', icon: 'dog', label: 'Пес' },
-          { key: 'money', icon: 'wallet', label: 'Фінанси' },
+        tabs={allowedTabs(me, [
+          { key: 'life', icon: 'home', label: 'Побут', section: 'tasks' },
+          { key: 'dog', icon: 'dog', label: 'Пес', section: 'tasks' },
+          { key: 'money', icon: 'wallet', label: 'Фінанси', section: 'finance' },
           { key: 'mine', icon: 'note', label: 'Моє' },
-        ]}
+        ])}
         active={tab}
         onChange={setTab}
       />
@@ -89,7 +89,7 @@ function Life({ me, category }) {
   )
 }
 
-function Money() {
+function Money({ me }) {
   const [m, setM] = useState(null)
   const [sel, setSel] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -134,7 +134,7 @@ function Money() {
             {e.text || 'Витрата'}
             {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
           </span>
-          <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>
+          <span className="amount">{money(e.amount)}</span>
           {(e.mine || m.can_approve) && (
             <button className="btn-icon" aria-label="Редагувати" onClick={() => setSel(e)}>
               {Icons.pencil(16)}

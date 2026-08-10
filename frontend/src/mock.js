@@ -16,6 +16,8 @@ export const MOCK = {
   '/api/me': {
     telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role], base: role,
     permissions: {}, task_categories: TASK_CATS[role] || [],
+    sections: { tasks: 'full', finance: 'full', risks: 'full', feed: 'full', team: role === 'owner' ? 'full' : 'none' },
+    fields: { amounts: true },
   },
   '/api/roles': {
     roles: [
@@ -86,7 +88,7 @@ export const MOCK = {
     { id: 3, text: 'Оплата підрядника проведена', level: 'low', resolved: true, keyword_hit: false, owner_role: 'manager', time: '2026-06-09T18:00:00' },
   ],
   '/api/money': {
-    sheet_id: 1, spent: 12400, budget: 17000, budget_pct: 73, can_approve: role === 'owner',
+    sheet_id: 1, summary: true, amounts: true, spent: 12400, budget: 17000, budget_pct: 73, can_approve: role === 'owner',
     expenses: [
       { id: 1, sheet_id: 2, text: 'Оренда обладнання', amount: 4500, currency: 'UAH', approved: false, approved_at: null, comment: '', mine: false, owner_role: 'manager', time: '2026-06-10T09:40:00' },
       { id: 2, sheet_id: 1, text: 'Паливо', amount: 1100, currency: 'UAH', approved: true, approved_at: '2026-06-10T18:25:00', comment: 'Заправляйся на ОККО — там дешевше', mine: role === 'driver', owner_role: 'driver', time: '2026-06-10T08:40:00' },

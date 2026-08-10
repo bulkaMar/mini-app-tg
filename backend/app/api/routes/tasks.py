@@ -20,6 +20,7 @@ from ...services.dictionaries import (
     visible_categories,
 )
 from ...services.access import visible_since
+from ...services.permissions import require_section
 
 from ...services.roles import (
     all_roles,
@@ -117,6 +118,7 @@ async def list_tasks(
     """Фільтри за категорією, людиною (роллю виконавця) і станом — точні збіги,
     тож рахуємо їх у запиті. Фільтр за датою лишається на клієнті: дедлайн
     зберігається «настінним» часом, а який зараз день — знає лише пристрій."""
+    require_section(user, "tasks")
     cats = await visible_categories(session, user)
     conds = []
     if category:
@@ -178,6 +180,7 @@ async def create_task(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_section(user, "tasks")
     await _check_task_category(session, user, body.category)
     # кому доручено. Роздавати іншим може лише власниця; решта створює задачі собі
     owner_role = user.role
@@ -215,6 +218,7 @@ async def update_task(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_section(user, "tasks")
     task = (
         await session.execute(
             select(Task).where(Task.id == task_id, Task.workspace_id == user.workspace_id)

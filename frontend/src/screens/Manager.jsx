@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
-import { CenterModal, Entry, Header, Icons, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, directionLabel, fmtDue, fmtTime, isOverdue, useLiveSel, usePoll, useToast } from '../components'
+import { CenterModal, Entry, Header, Icons, NewTaskModal, NotificationBell, ItemsBadge, PriorityMark, TabBar, TaskSheet, allowedTabs, directionLabel, fmtDue, fmtTime, isOverdue, useLiveSel, usePoll, useToast } from '../components'
 import Mine from './Mine'
 
 export default function Manager({ me }) {
@@ -15,12 +15,12 @@ export default function Manager({ me }) {
         {tab === 'mine' && <Mine />}
       </div>
       <TabBar
-        tabs={[
-          { key: 'project', icon: 'film', label: 'Проєкт' },
-          { key: 'risks', icon: 'alert', label: 'Тривоги' },
-          { key: 'tasks', icon: 'task', label: 'Задачі' },
+        tabs={allowedTabs(me, [
+          { key: 'project', icon: 'film', label: 'Проєкт', section: 'feed' },
+          { key: 'risks', icon: 'alert', label: 'Тривоги', section: 'risks' },
+          { key: 'tasks', icon: 'task', label: 'Задачі', section: 'tasks' },
           { key: 'mine', icon: 'note', label: 'Моє' },
-        ]}
+        ])}
         active={tab}
         onChange={setTab}
       />

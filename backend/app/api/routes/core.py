@@ -18,6 +18,11 @@ from ...services.dictionaries import (
     visible_categories,
 )
 from ...services.access import visible_since
+from ...services.permissions import (
+    fields_of,
+    require_section,
+    sections_of,
+)
 
 from ...services.roles import (
     role_labels,
@@ -108,6 +113,9 @@ async def me(
         # яким екраном користуватись, поки немає тумблерів розділів (0.5–0.7)
         "base": getattr(user, "base_role", user.role),
         "permissions": user.permissions or {},
+        # що людині відкрито — з цього фронт будує вкладки й ховає суми
+        "sections": sections_of(user),
+        "fields": fields_of(user),
         # у які розділи ця людина може класти задачі — з цього фронт будує вибір
         "task_categories": await usable_categories(session, user),
     }
@@ -125,6 +133,7 @@ async def feed(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
     """Стрічка повідомлень: owner — усі, інші — тільки свої категорії."""
+    require_section(user, "feed")
     where = [Message.workspace_id == user.workspace_id]
     since = visible_since(user)  # тимчасовому старий архів закритий
     if since is not None:

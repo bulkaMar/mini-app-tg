@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models import BudgetItem, Expense, ExpenseSheet, User
 from ...services.access import visible_since
+from ...services.permissions import require_section, sees_amounts, sees_summary
 from ...services.finance import (
     all_sheets,
     general_sheet_id,
@@ -62,6 +63,7 @@ class SheetIn(BaseModel):
 async def finance_sheets(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> dict:
+    require_section(user, "finance")
     visible = set(await visible_sheet_ids(session, user))
     rows = [s for s in await all_sheets(session, user.workspace_id) if s.id in visible]
     return {
@@ -170,6 +172,7 @@ async def money(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Витрати обраного листа (або всіх доступних, якщо лист не вказано)."""
+    require_section(user, "finance")
     sheet_ids, selected = await _resolve_sheet(session, user, sheet)
     since = visible_since(user)  # тимчасовий бачить лише з дня, коли його додали
 
@@ -186,19 +189,27 @@ async def money(
         q = q.where(Expense.telegram_id == user.telegram_id)
     rows = (await session.execute(q)).scalars().all()
 
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    spent = (await session.execute(
-        select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
-            *base, Expense.created_at >= month_start
-        )
-    )).scalar_one()
-    budget = await monthly_budget(session, user.workspace_id, sheet_ids)
-    budget_pct = round(spent / budget * 100) if budget else 0
+    # зведення (витрачено / бюджет / відсоток) — лише коли розділ відкритий повністю
+    summary = sees_summary(user, "finance")
+    amounts = sees_amounts(user)
+    spent = budget = budget_pct = None
+    if summary:
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        raw = (await session.execute(
+            select(func.coalesce(func.sum(Expense.amount), 0.0)).where(
+                *base, Expense.created_at >= month_start
+            )
+        )).scalar_one()
+        budget = await monthly_budget(session, user.workspace_id, sheet_ids)
+        spent = round(float(raw))
+        budget_pct = round(raw / budget * 100) if budget else 0
 
     return {
         "sheet_id": selected,
-        "spent": round(float(spent)),
+        "summary": summary,
+        "amounts": amounts,
+        "spent": spent,
         "budget": budget,
         "budget_pct": budget_pct,
         "can_approve": user.role == "owner" or bool((user.permissions or {}).get("approve_expenses")),
@@ -207,7 +218,8 @@ async def money(
                 "id": e.id,
                 "sheet_id": e.sheet_id,
                 "text": e.text,
-                "amount": e.amount,
+                # суму ховаємо, якщо поле закрите: видно ЩО купили, але не за скільки
+                "amount": e.amount if amounts else None,
                 "currency": e.currency,
                 "approved": e.approved,
                 "approved_at": e.approved_at.isoformat() if e.approved_at else None,
@@ -227,6 +239,7 @@ async def create_expense(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    require_section(user, "finance")
     visible = await visible_sheet_ids(session, user)
     sheet_id = body.sheet_id
     if sheet_id is None:  # лист не вказано — кладемо в «Загальний бюджет», якщо він відкритий

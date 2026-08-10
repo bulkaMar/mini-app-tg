@@ -3,6 +3,7 @@ import { get, patch, post, put } from '../api'
 import {
   CenterModal, ConfirmDialog, Dictate, DonutChart, Entry, ExpenseSheet, Header, Icons, Meter, MoneyInput, NewTaskModal, NoSheets, NotificationBell, ItemsBadge, PriorityMark, SwipeBack, TabBar, TaskSheet, ALL_SHEETS, SheetPicker, SheetsModal, byPriority, colorVar, fmtDue, isOverdue,
   useSheetSelection, useSheets, useRoles, assignableRoles, findRole, Field, Segmented,
+  allowedTabs, canOpen, money, seesAmounts, seesSummary,
   directionLabel, findCat, fmtTime,
   useDictionaries, useFeedUnread, useLiveSel, usePoll, useToast,
 } from '../components'
@@ -30,6 +31,25 @@ const FINANCE_SCOPE = [
   { value: 'all', label: 'Усі листи' },
   { value: 'sheets', label: 'Вибрані' },
 ]
+// розділи застосунку, які можна відкривати чи закривати по кожній людині.
+// «Тільки список» пропонуємо лише там, де є що ховати — зведення й суми.
+const APP_SECTIONS = [
+  { key: 'tasks', label: 'Задачі', hint: 'списки справ' },
+  { key: 'finance', label: 'Фінанси', hint: 'витрати й бюджет', hasSummary: true },
+  { key: 'risks', label: 'Тривоги', hint: 'проблеми, що горять' },
+  { key: 'feed', label: 'Потік', hint: 'стрічка надходжень' },
+  { key: 'team', label: 'Команда', hint: 'список людей' },
+]
+const STATE_FULL = [
+  { value: 'full', label: 'Повний' },
+  { value: 'list', label: 'Тільки список' },
+  { value: 'none', label: 'Закрито' },
+]
+const STATE_SIMPLE = [
+  { value: 'full', label: 'Відкрито' },
+  { value: 'none', label: 'Закрито' },
+]
+
 const ACCESS_PERIODS = [
   { value: 0, label: 'Безстроково' },
   { value: 12, label: '12 годин' },
@@ -49,6 +69,7 @@ const untilLabel = (iso) => {
    додаванні, і при редагуванні учасника. */
 function AccessFields({
   employment, setEmployment, scope, setScope, picked, setPicked, hours, setHours, until,
+  sections, setSections, fields, setFields,
 }) {
   const { sheets } = useSheets()
   const toggle = (id) =>
@@ -72,6 +93,34 @@ function AccessFields({
             : until
               ? `Зараз вхід діє до ${untilLabel(until)}. Новий строк почнеться від моменту збереження`
               : 'Відлік почнеться від моменту збереження, потім вхід анулюється сам'}
+        </div>
+      </Field>
+      <Field label="Що людина бачить">
+        <div className="perm-list">
+          {APP_SECTIONS.map((sec) => (
+            <div className="perm-row" key={sec.key}>
+              <div className="perm-name">
+                {sec.label}
+                <span className="row-sub">{sec.hint}</span>
+              </div>
+              <Segmented
+                options={sec.hasSummary ? STATE_FULL : STATE_SIMPLE}
+                value={sections[sec.key] || 'full'}
+                onChange={(v) => setSections({ ...sections, [sec.key]: v })} />
+            </div>
+          ))}
+        </div>
+        <div className="due-hint">
+          «Тільки список» — видно самі записи, без бюджету, відсотків і діаграми.
+        </div>
+      </Field>
+      <Field label="Окремі поля">
+        <Segmented
+          options={[{ value: 'yes', label: 'Суми видно' }, { value: 'no', label: 'Суми приховані' }]}
+          value={fields.amounts === false ? 'no' : 'yes'}
+          onChange={(v) => setFields({ ...fields, amounts: v === 'yes' })} />
+        <div className="due-hint">
+          Приховані суми: людина бачить, що куплено, але не бачить, за скільки.
         </div>
       </Field>
       <Field label="Доступ до фінансів">
@@ -132,7 +181,7 @@ export default function Owner({ me }) {
     view === 'life' ? <Life onBack={back} /> :
     view === 'logistics' ? <Logistics onBack={back} /> :
     view === 'risks' ? <Risks onBack={back} /> :
-    view === 'money' ? <Finance onBack={back} /> :
+    view === 'money' ? <Finance me={me} onBack={back} /> :
     view ? <CategoryTasks catKey={view} onBack={back} /> :
     null
   const screen =
@@ -141,7 +190,7 @@ export default function Owner({ me }) {
     tab === 'flow' ? <Flow /> :
     tab === 'mine' ? <Mine /> :
     tab === 'team' ? <Team /> :
-    <Finance />
+    <Finance me={me} />
 
   return (
     <div className="app with-dock">
@@ -153,13 +202,13 @@ export default function Owner({ me }) {
         <Dictate onSaved={() => setRefreshKey((k) => k + 1)} />
       </div>
       <TabBar
-        tabs={[
+        tabs={allowedTabs(me, [
           { key: 'home', icon: 'pulse', label: 'Головна' },
-          { key: 'flow', icon: 'inbox', label: 'Потік', badge: flowUnread },
+          { key: 'flow', icon: 'inbox', label: 'Потік', badge: flowUnread, section: 'feed' },
           { key: 'mine', icon: 'note', label: 'Моє' },
-          { key: 'team', icon: 'shield', label: 'Команда' },
-          { key: 'money', icon: 'wallet', label: 'Фінанси' },
-        ]}
+          { key: 'team', icon: 'shield', label: 'Команда', section: 'team' },
+          { key: 'money', icon: 'wallet', label: 'Фінанси', section: 'finance' },
+        ])}
         active={view ? '' : tab}
         onChange={(k) => { setView(null); setTab(k) }}
       />
@@ -264,6 +313,8 @@ function Team() {
   const [scope, setScope] = useState('all')
   const [picked, setPicked] = useState([])
   const [hours, setHours] = useState(0)
+  const [sections, setSections] = useState({})
+  const [fields, setFields] = useState({})
   const [toast, showToast] = useToast()
 
   const rd = useRoles()
@@ -276,6 +327,7 @@ function Team() {
       await post('/api/team', {
         username: username.trim(), name: name.trim(), role,
         employment, finance_scope: scope, finance_sheets: picked, access_hours: hours,
+        sections, fields,
       })
       setAdding(false); setUsername(''); setName('')
       showToast('Запрошення надіслано', 'ok')
@@ -293,6 +345,7 @@ function Team() {
   const openAdd = () => {
     setRole(freeRoles[0]?.value || ''); setUsername(''); setName('')
     setEmployment('permanent'); setScope('all'); setPicked([]); setHours(0)
+    setSections({}); setFields({})
     setAdding(true)
   }
   const canInvite = username.trim() && name.trim() // кнопка активна лише коли заповнені поля
@@ -350,7 +403,9 @@ function Team() {
           </select>
           <AccessFields employment={employment} setEmployment={setEmployment}
             scope={scope} setScope={setScope} picked={picked} setPicked={setPicked}
-            hours={hours} setHours={setHours} />
+            hours={hours} setHours={setHours}
+            sections={sections} setSections={setSections}
+            fields={fields} setFields={setFields} />
           <button className="btn-primary" style={{ background: 'var(--orange)', opacity: canInvite ? 1 : 0.45 }}
             disabled={!canInvite} onClick={invite}>
             Додати учасника
@@ -376,6 +431,8 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
   const [scope, setScope] = useState(fin.scope || 'all')
   const [picked, setPicked] = useState(fin.sheets || [])
   const [hours, setHours] = useState(0)   // 0 = не чіпати наявний строк
+  const [sections, setSections] = useState(m.sections || {})
+  const [fields, setFields] = useState(m.fields || {})
   const [busy, setBusy] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [toast, showToast] = useToast()
@@ -386,7 +443,9 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     employment !== (m.employment || 'permanent') ||
     scope !== (fin.scope || 'all') ||
     JSON.stringify([...picked].sort()) !== JSON.stringify([...(fin.sheets || [])].sort()) ||
-    hours !== 0
+    hours !== 0 ||
+    JSON.stringify(sections) !== JSON.stringify(m.sections || {}) ||
+    JSON.stringify(fields) !== JSON.stringify(m.fields || {})
 
   const save = async (extra = {}) => {
     if (busy) return
@@ -394,7 +453,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     try {
       await patch(`/api/team/${m.id}`, {
         name: name.trim(), username: username.trim(), role,
-        employment, finance_scope: scope, finance_sheets: picked,
+        employment, finance_scope: scope, finance_sheets: picked, sections, fields,
         ...(hours !== 0 ? { access_hours: hours } : {}), ...extra,
       })
       onChanged()
@@ -416,7 +475,9 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
       </select>
       <AccessFields employment={employment} setEmployment={setEmployment}
         scope={scope} setScope={setScope} picked={picked} setPicked={setPicked}
-        hours={hours} setHours={setHours} until={m.access_until} />
+        hours={hours} setHours={setHours} until={m.access_until}
+        sections={sections} setSections={setSections}
+        fields={fields} setFields={setFields} />
       {m.access_expired && (
         <div className="preview-meta" style={{ color: 'var(--red)' }}>
           Строк доступу вичерпано — людина зараз не заходить. Оберіть новий строк,
@@ -441,7 +502,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
 }
 
 /* ---------- Фінанси ---------- */
-function Finance({ onBack }) {
+function Finance({ me, onBack }) {
   const [m, setM] = useState(null)
   const [team, setTeam] = useState([])
   const [adding, setAdding] = useState(false)
@@ -454,6 +515,9 @@ function Finance({ onBack }) {
   const [sheet, setSheet, sheets, noSheets] = useSheetSelection()
   const rd = useRoles()
   const allSheets = sheet === ALL_SHEETS
+  // зведення й суми — за дозволами; сервер їх однаково не віддасть, тут лише не малюємо
+  const summary = seesSummary(me, 'finance') && m?.summary !== false
+  const showAmounts = seesAmounts(me) && m?.amounts !== false
 
   const load = useCallback(() => {
     if (!sheet) return
@@ -510,15 +574,19 @@ function Finance({ onBack }) {
       {onBack && <button className="back-btn" onClick={onBack}>{Icons.back(16)} Назад</button>}
       <Header icon="wallet" color="var(--orange)" title="Фінанси" sub={monthName} />
       <SheetPicker value={sheet} onChange={setSheet} onManage={() => setManageSheets(true)} />
-      <div className="stat-grid">
-        <div className="stat"><div className="num">{m.spent.toLocaleString('uk-UA')} <small>₴</small></div><div className="lbl">витрачено</div></div>
-        <div className="stat"><div className="num">{m.budget_pct}<small>%</small></div><div className="lbl">бюджету</div></div>
-      </div>
-      <Meter title={allSheets ? 'Бюджет усіх листів' : 'Бюджет місяця'}
-        value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
-        pct={m.budget_pct} level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'}
-        onEdit={allSheets ? undefined : () => setEditBudget(true)} />
-      {donutData.length > 0 && (
+      {summary && (
+        <>
+          <div className="stat-grid">
+            <div className="stat"><div className="num">{m.spent.toLocaleString('uk-UA')} <small>₴</small></div><div className="lbl">витрачено</div></div>
+            <div className="stat"><div className="num">{m.budget_pct}<small>%</small></div><div className="lbl">бюджету</div></div>
+          </div>
+          <Meter title={allSheets ? 'Бюджет усіх листів' : 'Бюджет місяця'}
+            value={`${Math.round(m.budget).toLocaleString('uk-UA')} ₴ · ${m.budget_pct}%`}
+            pct={m.budget_pct} level={m.budget_pct > 100 ? 'high' : m.budget_pct >= 80 ? 'med' : 'low'}
+            onEdit={allSheets ? undefined : () => setEditBudget(true)} />
+        </>
+      )}
+      {summary && donutData.length > 0 && (
         <div className="card">
           <div className="donut-title">{allSheets ? 'Як розкладено по листах' : 'На що йдуть гроші'}</div>
           <DonutChart data={donutData} centerValue={`${donutTotal.toLocaleString('uk-UA')} ₴`} centerCap="всього" />
@@ -539,7 +607,7 @@ function Finance({ onBack }) {
             <span className="row-sub">{authorLabel(rd, e.owner_role, team)}</span>
             {e.comment && <span className="comment-line">{Icons.comment(13)} {e.comment}</span>}
           </span>
-          <span className="amount">{Math.round(e.amount).toLocaleString('uk-UA')} ₴</span>
+          <span className="amount">{showAmounts ? money(e.amount) : '—'}</span>
           {!e.approved && m.can_approve && (
             <button className="btn-confirm" aria-label="Підтвердити"
               onClick={(ev) => { ev.stopPropagation(); approve(e.id) }}>
