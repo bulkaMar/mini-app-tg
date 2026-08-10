@@ -64,92 +64,66 @@ export const PICKABLE_ICONS = [
   'wallet', 'alert', 'flame', 'up', 'clock', 'bell', 'shield', 'pulse',
 ]
 
-let _dict = { categories: [], priorities: [] }
-let _dictLoaded = false
-const _dictSubs = new Set()
+/* ---------- спільні довідники ----------
+   Категорії, рівні важливості, листи витрат, ролі — усі поводяться однаково:
+   один запит на весь застосунок, усі підписники оновлюються разом,
+   перезавантаження при зміні на сервері (SSE). Раніше це були три копії
+   одного коду; тепер одна фабрика — за планом сюди ж стануть Медіа, Люди
+   й Зустрічі.
 
-async function loadDictionaries() {
-  try {
-    const d = await get('/api/dictionaries')
-    if (!d || !Array.isArray(d.categories) || !Array.isArray(d.priorities)) return
-    _dict = d
-    _dictLoaded = true
-    _dictSubs.forEach((fn) => { try { fn(d) } catch { /* ok */ } })
-  } catch { /* бек недоступний — списки лишаться порожніми, екрани не падають */ }
-}
+   `loaded` каже «відповідь отримано» (навіть якщо бек недоступний) — без
+   цього екран завис би на «Завантаження…» назавжди. */
+function createStore(path, empty, isValid) {
+  let data = { ...empty, loaded: false }
+  let everOk = false // хоч раз успішно завантажили — щоб повторювати спроби
+  const subs = new Set()
 
-export function useDictionaries() {
-  const [d, setD] = useState(_dict)
-  useEffect(() => {
-    _dictSubs.add(setD)
-    if (!_dictLoaded) loadDictionaries()
-    const off = onLiveChange(loadDictionaries) // хтось змінив довідник → оновлюємось
-    return () => { _dictSubs.delete(setD); off() }
-  }, [])
-  return d
-}
-export const refreshDictionaries = loadDictionaries
-
-/* ---------- листи витрат: той самий спільний кеш, що й для довідників ---------- */
-let _sheets = { sheets: [], can_manage: false, loaded: false }
-let _sheetsLoaded = false
-const _sheetSubs = new Set()
-
-async function loadSheets() {
-  try {
-    const d = await get('/api/finance/sheets')
-    if (!d || !Array.isArray(d.sheets)) return
-    _sheets = { ...d, loaded: true }
-    _sheetsLoaded = true
-  } catch {
-    // бек недоступний — теж вважаємо «відповідь отримано», інакше екран
-    // фінансів завис би на «Завантаження…» назавжди
-    _sheets = { ..._sheets, loaded: true }
-    _sheetsLoaded = true
+  async function load() {
+    try {
+      const d = await get(path)
+      if (isValid(d)) {
+        data = { ...d, loaded: true }
+        everOk = true
+      } else {
+        data = { ...data, loaded: true }
+      }
+    } catch {
+      data = { ...data, loaded: true }
+    }
+    subs.forEach((fn) => { try { fn(data) } catch { /* ok */ } })
   }
-  _sheetSubs.forEach((fn) => { try { fn(_sheets) } catch { /* ok */ } })
-}
 
-export function useSheets() {
-  const [d, setD] = useState(_sheets)
-  useEffect(() => {
-    _sheetSubs.add(setD)
-    if (!_sheetsLoaded) loadSheets()
-    const off = onLiveChange(loadSheets)
-    return () => { _sheetSubs.delete(setD); off() }
-  }, [])
-  return d
-}
-export const refreshSheets = loadSheets
-
-/* ---------- ролі: той самий спільний кеш ---------- */
-let _roles = { roles: [], can_manage: false, loaded: false }
-let _rolesLoaded = false
-const _roleSubs = new Set()
-
-async function loadRoles() {
-  try {
-    const d = await get('/api/roles')
-    if (d && Array.isArray(d.roles)) _roles = { ...d, loaded: true }
-    else return
-  } catch {
-    _roles = { ..._roles, loaded: true }
+  function useStore() {
+    const [d, setD] = useState(data)
+    useEffect(() => {
+      subs.add(setD)
+      if (!everOk) load()
+      const off = onLiveChange(load)
+      return () => { subs.delete(setD); off() }
+    }, [])
+    return d
   }
-  _rolesLoaded = true
-  _roleSubs.forEach((fn) => { try { fn(_roles) } catch { /* ok */ } })
+
+  return [useStore, load, () => data]
 }
 
-export function useRoles() {
-  const [d, setD] = useState(_roles)
-  useEffect(() => {
-    _roleSubs.add(setD)
-    if (!_rolesLoaded) loadRoles()
-    const off = onLiveChange(loadRoles)
-    return () => { _roleSubs.delete(setD); off() }
-  }, [])
-  return d
-}
-export const refreshRoles = loadRoles
+export const [useDictionaries, refreshDictionaries] = createStore(
+  '/api/dictionaries',
+  { categories: [], priorities: [] },
+  (d) => d && Array.isArray(d.categories) && Array.isArray(d.priorities),
+)
+export const [useSheets, refreshSheets] = createStore(
+  '/api/finance/sheets',
+  { sheets: [], can_manage: false },
+  (d) => d && Array.isArray(d.sheets),
+)
+const [useRolesStore, refreshRolesStore, peekRoles] = createStore(
+  '/api/roles',
+  { roles: [], can_manage: false },
+  (d) => d && Array.isArray(d.roles),
+)
+export const useRoles = useRolesStore
+export const refreshRoles = refreshRolesStore
 
 export const findRole = (rd, key) => rd?.roles?.find((r) => r.key === key)
 // ролі, які можна призначити людині (роль власниці не роздається)
@@ -191,7 +165,7 @@ function whoName(role, meRole) {
   if (!role) return ''
   if (role === meRole) return meRole === 'owner' ? 'Ти' : 'Я'
   // назву власної ролі беремо з довідника (кеш тримає App), інакше — запасну
-  return _roles.roles.find((r) => r.key === role)?.label || ROLE_NAME[role] || role
+  return peekRoles().roles.find((r) => r.key === role)?.label || ROLE_NAME[role] || role
 }
 export function directionLabel(e, meRole) {
   const from = whoName(e.role, meRole)
