@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
 import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtDue, isOverdue, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
+import Mine from './Mine'
 
 export default function Assistant({ me }) {
   const [tab, setTab] = useState('life')
@@ -11,12 +12,14 @@ export default function Assistant({ me }) {
         {tab === 'life' && <Life me={me} category="life" />}
         {tab === 'dog' && <Life me={me} category="dog" />}
         {tab === 'money' && <Money />}
+        {tab === 'mine' && <Mine />}
       </div>
       <TabBar
         tabs={[
           { key: 'life', icon: 'home', label: 'Побут' },
           { key: 'dog', icon: 'dog', label: 'Пес' },
           { key: 'money', icon: 'wallet', label: 'Фінанси' },
+          { key: 'mine', icon: 'note', label: 'Моє' },
         ]}
         active={tab}
         onChange={setTab}

@@ -122,6 +122,32 @@ class TaskItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class Note(Base):
+    """Особисті записи людини. Два списки в одній таблиці:
+
+    - kind="note"    — Нотатки: робочі записи для себе
+    - kind="private" — Особисте: свої справи й думки
+
+    Обидва бачить ТІЛЬКИ автор. Власниця теж не бачить чужих — це окрема
+    таблиця, тож записи фізично не потрапляють ні в стрічку, ні в панель,
+    ні в задачі, ні в те, що читає AI.
+    """
+
+    __tablename__ = "notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, index=True)  # автор — єдиний, хто бачить
+    kind: Mapped[str] = mapped_column(String(10), default="note")  # note|private
+    text: Mapped[str] = mapped_column(Text)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)  # запис може бути справою
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Risk(Base):
     __tablename__ = "risks"
 

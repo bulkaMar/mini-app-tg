@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { get, post } from '../api'
 import { ALL_SHEETS, CenterModal, ExpenseSheet, Header, Icons, ItemsBadge, MoneyInput, NewTaskModal, NoSheets, NotificationBell, PriorityMark, SheetPicker, TabBar, TaskSheet, fmtTime, useLiveSel, usePoll, useSheetSelection, useToast } from '../components'
+import Mine from './Mine'
 
 export default function Driver({ me }) {
   const [tab, setTab] = useState('shift')
@@ -11,12 +12,14 @@ export default function Driver({ me }) {
         {tab === 'shift' && <Shift me={me} />}
         {tab === 'trips' && <Trips me={me} />}
         {tab === 'money' && <Money />}
+        {tab === 'mine' && <Mine />}
       </div>
       <TabBar
         tabs={[
           { key: 'shift', icon: 'truck', label: 'Зміна' },
           { key: 'trips', icon: 'pin', label: 'Поїздки' },
           { key: 'money', icon: 'fuel', label: 'Фінанси' },
+          { key: 'mine', icon: 'note', label: 'Моє' },
         ]}
         active={tab}
         onChange={setTab}

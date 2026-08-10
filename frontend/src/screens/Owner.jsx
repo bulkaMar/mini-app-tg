@@ -8,6 +8,7 @@ import {
 } from '../components'
 import Settings from './Settings'
 import AllTasks from './AllTasks'
+import Mine from './Mine'
 
 const LOAD_LABEL = { LOW: 'НИЗЬКИЙ', MED: 'СЕРЕДНІЙ', HIGH: 'ВИСОКИЙ' }
 const LOAD_PCT = { LOW: 25, MED: 55, HIGH: 90 }
@@ -138,6 +139,7 @@ export default function Owner({ me }) {
     drilldown ? drill(drilldown) :
     tab === 'home' ? <Home openView={setView} /> :
     tab === 'flow' ? <Flow /> :
+    tab === 'mine' ? <Mine /> :
     tab === 'team' ? <Team /> :
     <Finance />
 
@@ -154,6 +156,7 @@ export default function Owner({ me }) {
         tabs={[
           { key: 'home', icon: 'pulse', label: 'Головна' },
           { key: 'flow', icon: 'inbox', label: 'Потік', badge: flowUnread },
+          { key: 'mine', icon: 'note', label: 'Моє' },
           { key: 'team', icon: 'shield', label: 'Команда' },
           { key: 'money', icon: 'wallet', label: 'Фінанси' },
         ]}

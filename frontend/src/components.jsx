@@ -39,6 +39,8 @@ export const Icons = {
   // важливість: полум'я — супер термінова, подвійна стрілка вгору — важлива
   flame: (s) => <I size={s}><path d="M12 21a6 6 0 006-6c0-4-3.5-6.5-6-9.5-2.5 3-6 5.5-6 9.5a6 6 0 006 6z" /><path d="M12 21a2.6 2.6 0 002.6-2.6c0-1.7-1.6-2.7-2.6-4.1-1 1.4-2.6 2.4-2.6 4.1A2.6 2.6 0 0012 21z" /></I>,
   up: (s) => <I size={s}><path d="M6 13l6-6 6 6" /><path d="M6 18l6-6 6 6" /></I>,
+  note: (s) => <I size={s}><path d="M5 4.5A1.5 1.5 0 016.5 3h11A1.5 1.5 0 0119 4.5v15a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 015 19.5z" /><path d="M8.5 8h7M8.5 12h7M8.5 16h4" /></I>,
+  lock: (s) => <I size={s}><rect x="4.5" y="10" width="15" height="10" rx="2.5" /><path d="M8 10V7.5a4 4 0 018 0V10" /><path d="M12 14v2.5" /></I>,
   gear: (s) => <I size={s}><circle cx="12" cy="12" r="3.2" /><path d="M19.4 14.5a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5v.2a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H2a2 2 0 010-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H10a1.6 1.6 0 001-1.5V2a2 2 0 014 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V10a1.6 1.6 0 001.5 1h.2a2 2 0 010 4h-.1a1.6 1.6 0 00-1.5 1z" /></I>,
   chevUp: (s) => <I size={s}><path d="M6 15l6-6 6 6" /></I>,
   chevDown: (s) => <I size={s}><path d="M6 9l6 6 6-6" /></I>,
@@ -411,8 +413,9 @@ export function SwipeBack({ onBack, children }) {
 }
 
 export function TabBar({ tabs, active, onChange }) {
+  // пʼять і більше кнопок — стискаємо, щоб пігулка влазила й на вузькому екрані
   return (
-    <nav className="tabbar">
+    <nav className={`tabbar ${tabs.length >= 5 ? 'compact' : ''}`}>
       {tabs.map((t) => (
         <button key={t.key} className={`${active === t.key ? 'active' : ''}${t.badge ? ' has-badge' : ''}`}
           onClick={() => { haptic(); onChange(t.key) }}>
