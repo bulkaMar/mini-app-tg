@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { get } from './api'
 import { initTelegram } from './telegram'
 import { Icons, useRoles } from './components'
-import Owner from './screens/Owner'
-import Manager from './screens/Manager'
-import Assistant from './screens/Assistant'
-import Driver from './screens/Driver'
+import Workspace from './screens/Workspace'
 
 export default function App() {
   const [me, setMe] = useState(null)
@@ -33,13 +30,6 @@ export default function App() {
 
   if (!me) return <div className="loading" style={{ paddingTop: '40vh' }}>Завантаження…</div>
 
-  // Роутинг за «поводиться як»: у власної ролі («Фотограф») своя назва й колір,
-  // але екран — один із чотирьох базових, поки немає тумблерів розділів (0.5–0.7).
-  switch (me.base || me.role) {
-    case 'owner': return <Owner me={me} />
-    case 'manager': return <Manager me={me} />
-    case 'assistant': return <Assistant me={me} />
-    case 'driver': return <Driver me={me} />
-    default: return <Assistant me={me} />
-  }
+  // Один екран на всіх: вкладки збираються з того, що людині відкрито (0.14)
+  return <Workspace me={me} />
 }

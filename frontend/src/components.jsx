@@ -602,10 +602,6 @@ export const seesAmounts = (me) => me?.fields?.amounts !== false
 /* сума або прочерк, коли поле закрите */
 export const money = (v) => (v == null ? '—' : `${Math.round(v).toLocaleString('uk-UA')} ₴`)
 
-/* лишає у таб-барі тільки відкриті розділи */
-export const allowedTabs = (me, tabs) =>
-  tabs.filter((t) => !t.section || canOpen(me, t.section))
-
 /* ---------- фільтри задач: категорія · людина · дата · стан ----------
    Категорія, людина і стан рахуються на сервері (точні збіги). Дата — тут:
    дедлайн зберігається «настінним» часом, і який зараз день, знає лише пристрій. */
