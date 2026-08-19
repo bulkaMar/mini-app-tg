@@ -6,7 +6,7 @@
 
    Тепер вкладки збираються з того, що людині відкрито:
    - по вкладці на кожну доступну категорію задач;
-   - Фінанси, Тривоги, Потік, Команда — за тумблерами дозволів;
+   - Фінанси, Тривоги, Потік, Люди — за тумблерами дозволів;
    - «Моє» є завжди: це особисті записи, їх не відбирають;
    - у власниці замість категорій-вкладок — Головна, звідки вона заходить
      у кожну категорію (інакше в неї було б дев'ять вкладок);
@@ -22,11 +22,11 @@ import Finance from './Finance'
 import Flow from './Flow'
 import Home from './Home'
 import Mine from './Mine'
+import People from './People'
 import Report from './Report'
 import Risks from './Risks'
 import Settings from './Settings'
 import Shift from './Shift'
-import Team from './Team'
 
 export default function Workspace({ me }) {
   const dict = useDictionaries()
@@ -58,7 +58,7 @@ export default function Workspace({ me }) {
     tab === 'risks' ? <Risks /> :
     tab === 'flow' ? <Flow me={me} /> :
     tab === 'money' ? <Finance me={me} /> :
-    tab === 'team' ? <Team /> :
+    tab === 'people' ? <People me={me} /> :
     tab === 'mine' ? <Mine /> :
     tab.startsWith('cat:') ? <CategoryTasks catKey={tab.slice(4)} /> :
     <Mine />

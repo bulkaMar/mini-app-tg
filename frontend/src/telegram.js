@@ -24,6 +24,23 @@ export function getInitData() {
   return tg?.initData || ''
 }
 
+/* Чат у Telegram (6.4). Своїх дзвінків і чатів не робимо — переходимо в те,
+   де людина вже спілкується. У Mini App є рідний виклик; у браузері — вкладка. */
+export function openTelegram(username) {
+  const clean = String(username || '').replace(/^@/, '').trim()
+  if (!clean) return
+  const url = `https://t.me/${clean}`
+  try {
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(url)
+      return
+    }
+  } catch {
+    /* старі клієнти */
+  }
+  window.open(url, '_blank')
+}
+
 export function haptic(type = 'light') {
   try {
     tg?.HapticFeedback?.impactOccurred(type)

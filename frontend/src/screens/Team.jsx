@@ -1,8 +1,11 @@
+/* Підвкладка «Команда» розділу «Люди»: ті, хто заходить у застосунок.
+   Заголовок і перемикач підвкладок дає People.jsx — тут лише список,
+   додавання учасника й вікно налаштування доступу. */
 import { useCallback, useState } from 'react'
 import { get, patch, post } from '../api'
 import {
-  CenterModal, ConfirmDialog, Field, Header, Icons, Segmented, assignableRoles,
-  colorVar, findRole, useRoles, useSheets, usePoll, useToast,
+  CenterModal, ConfirmDialog, Field, Icons, Segmented, assignableRoles,
+  findRole, useRoles, useSheets, usePoll, useToast,
 } from '../components'
 import { roleColor } from './shared'
 
@@ -21,7 +24,7 @@ const APP_SECTIONS = [
   { key: 'finance', label: 'Фінанси', hint: 'витрати й бюджет', hasSummary: true },
   { key: 'risks', label: 'Тривоги', hint: 'проблеми, що горять' },
   { key: 'feed', label: 'Потік', hint: 'стрічка надходжень' },
-  { key: 'team', label: 'Команда', hint: 'список людей' },
+  { key: 'team', label: 'Люди', hint: 'команда й контакти' },
 ]
 const STATE_FULL = [
   { value: 'full', label: 'Повний' },
@@ -40,8 +43,8 @@ const ACCESS_PERIODS = [
   { value: 72, label: '3 доби' },
   { value: 168, label: 'Тиждень' },
 ]
-// «до 12.08, 14:30» для підпису в списку команди
-const untilLabel = (iso) => {
+// «до 12.08, 14:30» для підпису в списку команди й у картці людини
+export const untilLabel = (iso) => {
   if (!iso) return ''
   const d = new Date(iso)
   const p2 = (n) => String(n).padStart(2, '0')
@@ -131,12 +134,12 @@ function AccessFields({
 
 
 /* ---------- Команда ---------- */
-export default function Team() {
+export default function Team({ owner, onOpen }) {
   const [team, setTeam] = useState(null)
   const [adding, setAdding] = useState(false)
-  const [sel, setSel] = useState(null) // вибраний учасник → редагування
   const [username, setUsername] = useState('')
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [role, setRole] = useState('manager')
   const [employment, setEmployment] = useState('permanent')
   const [scope, setScope] = useState('all')
@@ -154,11 +157,11 @@ export default function Team() {
     if (!username.trim()) return
     try {
       await post('/api/team', {
-        username: username.trim(), name: name.trim(), role,
+        username: username.trim(), name: name.trim(), phone: phone.trim(), role,
         employment, finance_scope: scope, finance_sheets: picked, access_hours: hours,
         sections, fields,
       })
-      setAdding(false); setUsername(''); setName('')
+      setAdding(false); setUsername(''); setName(''); setPhone('')
       showToast('Запрошення надіслано', 'ok')
       load()
     } catch (e) { showToast(e.message, 'warn') }
@@ -172,7 +175,7 @@ export default function Team() {
     .filter((r) => !used.has(r.key))
     .map((r) => ({ value: r.key, label: r.label }))
   const openAdd = () => {
-    setRole(freeRoles[0]?.value || ''); setUsername(''); setName('')
+    setRole(freeRoles[0]?.value || ''); setUsername(''); setName(''); setPhone('')
     setEmployment('permanent'); setScope('all'); setPicked([]); setHours(0)
     setSections({}); setFields({})
     setAdding(true)
@@ -180,14 +183,12 @@ export default function Team() {
   const canInvite = username.trim() && name.trim() // кнопка активна лише коли заповнені поля
 
   return (
-    <div className="screen">
-      <Header icon="shield" color="var(--orange)" title="Команда" sub={`${team.length} учасники`} />
+    <>
       <div className="card" style={{ padding: '2px 14px' }}>
         {team.map((m) => (
           <div key={m.id} className={`member ${m.status === 'invited' ? 'invited' : ''}`}
-            role={m.role === 'owner' ? undefined : 'button'} tabIndex={m.role === 'owner' ? undefined : 0}
-            style={m.role === 'owner' ? undefined : { cursor: 'pointer' }}
-            onClick={m.role === 'owner' ? undefined : () => setSel(m)}>
+            role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+            onClick={() => onOpen(m)}>
             <div className="avatar" style={{ background: m.status === 'invited' ? '#d9c79a' : roleColor(rd, m.role) }}>
               {m.role === 'owner' ? 'Я' : initials(m.name || m.username || '?')}
             </div>
@@ -208,25 +209,24 @@ export default function Team() {
               }}>
               {(m.role_label || m.role).toUpperCase()}
             </span>
-            {m.role !== 'owner' && (
-              <span className="ico" style={{ color: 'var(--muted)', display: 'flex' }}>{Icons.pencil(15)}</span>
-            )}
           </div>
         ))}
       </div>
-      {freeRoles.length > 0 ? (
+      {/* додавати людей може лише власниця — решта просто дивиться список */}
+      {owner && (freeRoles.length > 0 ? (
         <button className="btn-dashed" style={{ color: 'var(--orange)' }} onClick={openAdd}>
           {Icons.addUser(20)} Додати учасника
         </button>
       ) : (
         <div className="empty">Усі ролі зайняті — видали учасника, щоб додати іншого</div>
-      )}
+      ))}
 
       {adding && (
         <CenterModal title="Новий учасник" sub={(findRole(rd, role)?.label || '').toUpperCase()}
           onClose={() => setAdding(false)}>
           <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
           <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="Телефон (для дзвінка)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             {freeRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
@@ -241,20 +241,18 @@ export default function Team() {
           </button>
         </CenterModal>
       )}
-      {sel && (
-        <MemberSheet m={sel} rd={rd} onClose={() => setSel(null)}
-          onChanged={() => { setSel(null); load() }} />
-      )}
       {toast}
-    </div>
+    </>
   )
 }
 
-/* ---------- редагування учасника ---------- */
-function MemberSheet({ m, rd, onClose, onChanged }) {
+/* ---------- редагування учасника ----------
+   Відкривається з картки людини (Люди → людина → «Налаштувати доступ»). */
+export function MemberSheet({ m, rd, onClose, onChanged }) {
   const fin = (m.permissions || {}).finance || {}
   const [name, setName] = useState(m.name || '')
   const [username, setUsername] = useState(m.username || '')
+  const [phone, setPhone] = useState(m.phone || '')
   const [role, setRole] = useState(m.role)
   const [employment, setEmployment] = useState(m.employment || 'permanent')
   const [scope, setScope] = useState(fin.scope || 'all')
@@ -268,6 +266,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
   const changed =
     name.trim() !== (m.name || '') ||
     username.trim().replace(/^@/, '') !== (m.username || '') ||
+    phone.trim() !== (m.phone || '') ||
     role !== m.role ||
     employment !== (m.employment || 'permanent') ||
     scope !== (fin.scope || 'all') ||
@@ -281,7 +280,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     setBusy(true)
     try {
       await patch(`/api/team/${m.id}`, {
-        name: name.trim(), username: username.trim(), role,
+        name: name.trim(), username: username.trim(), phone: phone.trim(), role,
         employment, finance_scope: scope, finance_sheets: picked, sections, fields,
         ...(hours !== 0 ? { access_hours: hours } : {}), ...extra,
       })
@@ -297,6 +296,7 @@ function MemberSheet({ m, rd, onClose, onChanged }) {
     >
       <input placeholder="Ім'я (як показувати)" value={name} onChange={(e) => setName(e.target.value)} />
       <input placeholder="@username у Telegram" value={username} onChange={(e) => setUsername(e.target.value)} />
+      <input placeholder="Телефон (для дзвінка)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
       <select value={role} onChange={(e) => setRole(e.target.value)}>
         {assignableRoles(rd).map((r) => (
           <option key={r.key} value={r.key}>{r.label}</option>

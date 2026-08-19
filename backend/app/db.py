@@ -49,6 +49,8 @@ _ADD_COLUMNS = [
     ("expenses", "workspace_id", "INTEGER"),
     ("budget_items", "workspace_id", "INTEGER"),
     ("daily_snapshots", "workspace_id", "INTEGER"),
+    # Люди (Етап 6): телефон для дзвінка з картки
+    ("users", "phone", "VARCHAR(40)"),
 ]
 
 # таблиці, рядки яких треба прив'язати до workspace при міграції наявної БД.

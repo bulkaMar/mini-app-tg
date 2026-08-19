@@ -105,6 +105,7 @@ async def me(
     user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> dict:
     return {
+        "id": user.id,  # щоб розділ «Люди» впізнав власну картку
         "telegram_id": user.telegram_id,
         "name": user.name,
         "username": user.username,

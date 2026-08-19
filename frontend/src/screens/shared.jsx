@@ -1,5 +1,6 @@
 /* Дрібниці, якими користуються кілька екранів. */
-import { colorVar, findRole } from '../components'
+import { Icons, colorVar, findRole } from '../components'
+import { openTelegram } from '../telegram'
 
 // українське відмінювання: 1 справа · 3 справи · 8 справ
 const plural = (n, one, few, many) => {
@@ -24,4 +25,25 @@ export const authorLabel = (rd, role, team) => {
   const word = findRole(rd, role)?.label || role
   const n = memberName(team, role)
   return n ? `${word} · ${n}` : word
+}
+
+/* Зв'язок із людиною (6.4). Своїх дзвінків і чатів не робимо — переходимо
+   туди, де вже спілкуються. Телефон саме посиланням `tel:`: це єдине, що
+   надійно спрацьовує у вебвʼю Telegram і віддає номер системному дзвінку. */
+export function CallRow({ phone, username }) {
+  if (!phone && !username) return null
+  return (
+    <div className="call-row">
+      {username && (
+        <button type="button" className="btn-small" onClick={() => openTelegram(username)}>
+          {Icons.send(15)} Написати
+        </button>
+      )}
+      {phone && (
+        <a className="btn-small" href={`tel:${phone.replace(/[^\d+]/g, '')}`}>
+          {Icons.phone(15)} Подзвонити
+        </a>
+      )}
+    </div>
+  )
 }

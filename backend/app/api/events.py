@@ -10,8 +10,8 @@ from sqlalchemy import case, func, select
 
 from ..db import SessionMaker
 from ..models import (
-    BudgetItem, Expense, ExpenseSheet, Message, Risk, Role, Task, TaskCategory, TaskItem,
-    TaskPriority, User,
+    BudgetItem, Contact, Expense, ExpenseSheet, Message, Risk, Role, Task, TaskCategory,
+    TaskItem, TaskPriority, User,
 )
 
 log = logging.getLogger(__name__)
@@ -117,6 +117,16 @@ async def _fingerprints(session) -> dict[int | None, str]:
             Role.workspace_id, func.count(),
             func.coalesce(func.sum(func.length(Role.label)), 0),
         ).group_by(Role.workspace_id)
+    )).all())
+
+    # записник: додали/поправили/видалили контакт
+    merge((await session.execute(
+        select(
+            Contact.workspace_id, func.max(Contact.id), func.count(),
+            func.coalesce(func.sum(func.length(Contact.name)), 0),
+            func.coalesce(func.sum(func.length(Contact.note)), 0),
+            func.sum(case((Contact.deleted_at.is_not(None), 1), else_=0)),
+        ).group_by(Contact.workspace_id)
     )).all())
 
     return {ws: "-".join(parts) for ws, parts in acc.items()}

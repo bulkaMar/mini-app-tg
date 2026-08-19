@@ -33,7 +33,8 @@ export function buildTabs(me, dict) {
   if (opened(me, 'feed')) tabs.push({ key: 'flow', icon: 'inbox', label: 'Потік' })
   if (opened(me, 'finance')) tabs.push({ key: 'money', icon: 'wallet', label: 'Фінанси' })
   tabs.push({ key: 'mine', icon: 'note', label: 'Моє' })
-  if (opened(me, 'team')) tabs.push({ key: 'team', icon: 'shield', label: 'Команда' })
+  // ключ дозволу лишається 'team' — на нього спираються збережені налаштування
+  if (opened(me, 'team')) tabs.push({ key: 'people', icon: 'users', label: 'Люди' })
 
   return tabs
 }

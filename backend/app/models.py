@@ -27,6 +27,7 @@ class User(Base):
     telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(120), default="")
     username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)  # для дзвінка з картки (6.4)
     role: Mapped[str] = mapped_column(String(20), default="assistant")  # owner|manager|assistant|driver
     permissions: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active|invited
@@ -56,6 +57,28 @@ class Role(Base):
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     sort: Mapped[int] = mapped_column(Integer, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Contact(Base):
+    """Записник (6.2): люди без доступу в застосунок.
+
+    Навмисно окрема таблиця, а не «учасник без входу». У контакта немає ролі,
+    дозволів і строку доступу — тільки ім'я, телефон і чим займається. Так
+    контакт ніде не сплутається з учасником команди й не отримає доступу
+    випадково: він просто не існує для перевірок «хто що бачить».
+    """
+
+    __tablename__ = "contacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120))
+    title: Mapped[str] = mapped_column(String(120), default="")  # «Гример», «Оренда світла»
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)  # telegram, без @
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Message(Base):

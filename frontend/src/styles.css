@@ -361,7 +361,7 @@ html, body {
 .btn-small.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 .btn-small.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
 
-/* ---------- team ---------- */
+/* ---------- люди: команда, контакти, картка людини ---------- */
 .member { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .member:last-of-type { border-bottom: none; }
 .member .avatar {
@@ -379,6 +379,31 @@ html, body {
   color: #fff; border-radius: 999px; padding: 5px 11px; white-space: nowrap;
 }
 .badge.outline { background: transparent !important; border: 1.4px solid currentColor; }
+
+/* шапка картки людини */
+.person-top { display: flex; align-items: center; gap: 12px; }
+.person-top .avatar {
+  width: 52px; height: 52px; border-radius: 16px; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 17px; flex-shrink: 0;
+}
+.person-top .info { flex: 1; min-width: 0; }
+.person-top .name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.person-top .uname { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* чат і дзвінок — дві однакові кнопки в рядок */
+.call-row { display: flex; gap: 8px; }
+.call-row > * { flex: 1; text-decoration: none; padding: 11px; font-size: 14px; border-radius: 12px; }
+
+/* три числа: у роботі · виконано · витрачено */
+.stat-row { display: flex; gap: 8px; }
+.stat {
+  flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 8px; text-align: center;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.stat b { font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
+.stat span { font-size: 11.5px; color: var(--muted); }
 
 /* ---------- dictate ---------- */
 .dictate { display: flex; gap: 8px; align-items: stretch; }

@@ -18,7 +18,12 @@ from ...services.finance import (
     normalize_finance_perms,
 )
 
-from ...services.permissions import fields_of, normalize as normalize_perms, sections_of
+from ...services.permissions import (
+    fields_of,
+    normalize as normalize_perms,
+    require_section,
+    sections_of,
+)
 from ...services.roles import (
     all_roles,
     role_labels,
@@ -26,7 +31,7 @@ from ...services.roles import (
 
 
 
-from ..deps import get_session, require_owner
+from ..deps import get_current_user, get_session, require_owner
 
 
 
@@ -50,6 +55,7 @@ async def _check_member_role(session: AsyncSession, user: User, key: str) -> Non
 class MemberIn(BaseModel):
     username: str
     name: str = ""
+    phone: str = ""
     role: str = "assistant"
     employment: str = "permanent"          # permanent | temporary
     finance_scope: str = "all"             # all | sheets
@@ -59,34 +65,53 @@ class MemberIn(BaseModel):
     fields: dict = {}                      # поле → чи показувати
 
 
+def member_card(u: User, labels: dict[str, str]) -> dict:
+    """Те, що видно кожному, кому відкритий розділ «Люди»: як звати, ким працює
+    і як зв'язатись. Нічого про доступи — це справа власниці."""
+    return {
+        "id": u.id,
+        "name": u.name,
+        "username": u.username,
+        "phone": u.phone,
+        "role": u.role,
+        "role_label": labels.get(u.role, u.role),
+        "status": u.status,
+    }
+
+
 @router.get("/team")
 async def team(
-    user: User = Depends(require_owner), session: AsyncSession = Depends(get_session)
+    user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ) -> list[dict]:
+    """Список людей простору.
+
+    Власниця бачить усе, зокрема налаштування доступу кожного. Решта — лише
+    картку (ім'я, роль, як зв'язатись), і тільки якщо розділ їй відкритий:
+    хто які розділи бачить і доки — не їхня справа.
+    """
+    require_section(user, "team")
+    owner_view = getattr(user, "base_role", user.role) == "owner"
     rows = (
         await session.execute(
             select(User).where(User.workspace_id == user.workspace_id).order_by(User.created_at.asc())
         )
     ).scalars().all()
     labels = await role_labels(session, user.workspace_id)
-    return [
-        {
-            "id": u.id,
-            "name": u.name,
-            "username": u.username,
-            "role": u.role,
-            "role_label": labels.get(u.role, u.role),
-            "status": u.status,
-            "permissions": u.permissions or {},
-            "employment": u.employment or "permanent",
-            "visible_from": u.visible_from.isoformat() if u.visible_from else None,
-            "access_until": u.access_until.isoformat() if u.access_until else None,
-            "access_expired": access_expired(u),
-            "sections": sections_of(u),
-            "fields": fields_of(u),
-        }
-        for u in rows
-    ]
+    out = []
+    for u in rows:
+        card = member_card(u, labels)
+        if owner_view:
+            card |= {
+                "permissions": u.permissions or {},
+                "employment": u.employment or "permanent",
+                "visible_from": u.visible_from.isoformat() if u.visible_from else None,
+                "access_until": u.access_until.isoformat() if u.access_until else None,
+                "access_expired": access_expired(u),
+                "sections": sections_of(u),
+                "fields": fields_of(u),
+            }
+        out.append(card)
+    return out
 
 
 @router.post("/team")
@@ -101,7 +126,8 @@ async def invite_member(
     temporary = body.employment == "temporary"
     member = User(
         workspace_id=user.workspace_id,  # запрошений приєднується до простору власника
-        username=username, name=body.name or username, role=body.role, status="invited",
+        username=username, name=body.name or username, phone=body.phone.strip() or None,
+        role=body.role, status="invited",
         employment="temporary" if temporary else "permanent",
         # тимчасовий бачить лише те, що зʼявилось після його додавання
         visible_from=datetime.now(timezone.utc) if temporary else None,
@@ -134,6 +160,8 @@ async def update_member(
         raise HTTPException(status_code=403, detail="cannot modify owner")
     if isinstance(body.get("name"), str) and body["name"].strip():
         member.name = body["name"].strip()
+    if isinstance(body.get("phone"), str):
+        member.phone = body["phone"].strip() or None  # порожнє поле = прибрати номер
     if isinstance(body.get("username"), str) and body["username"].strip():
         new_username = body["username"].strip().lstrip("@")
         # зміна тега в активного = заміна людини: відвʼязуємо старий акаунт,

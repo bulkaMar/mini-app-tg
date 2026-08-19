@@ -14,6 +14,7 @@ const TASK_CATS = {
 
 export const MOCK = {
   '/api/me': {
+    id: { owner: 1, manager: 2, assistant: 3, driver: 4 }[role] || 1,
     telegram_id: 1, name: NAMES[role], role, role_label: ROLE_LABELS[role], base: role,
     permissions: {}, task_categories: TASK_CATS[role] || [],
     sections: { tasks: 'full', finance: 'full', risks: 'full', feed: 'full', team: role === 'owner' ? 'full' : 'none' },
@@ -104,10 +105,14 @@ export const MOCK = {
     ],
   },
   '/api/team': [
-    { id: 1, name: 'Ти', username: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {}, employment: 'permanent', visible_from: null, access_until: null, access_expired: false },
-    { id: 2, name: 'Марія К.', username: 'maria_pm', role: 'manager', role_label: 'менеджер', status: 'active', permissions: {} },
-    { id: 3, name: 'Оля Л.', username: 'olya', role: 'assistant', role_label: 'асистент', status: 'active', permissions: {} },
-    { id: 4, name: 'Віктор Д.', username: 'viktor_d', role: 'driver', role_label: 'водій', status: 'invited', permissions: {}, employment: 'temporary', visible_from: '2026-06-01T00:00:00', access_until: '2026-06-20T18:00:00', access_expired: false },
+    { id: 1, name: 'Ти', username: null, phone: null, role: 'owner', role_label: 'власник', status: 'active', permissions: {}, employment: 'permanent', visible_from: null, access_until: null, access_expired: false },
+    { id: 2, name: 'Марія К.', username: 'maria_pm', phone: '+380671112233', role: 'manager', role_label: 'менеджер', status: 'active', permissions: {} },
+    { id: 3, name: 'Оля Л.', username: 'olya', phone: null, role: 'assistant', role_label: 'асистент', status: 'active', permissions: {} },
+    { id: 4, name: 'Віктор Д.', username: 'viktor_d', phone: '+380509998877', role: 'driver', role_label: 'водій', status: 'invited', permissions: {}, employment: 'temporary', visible_from: '2026-06-01T00:00:00', access_until: '2026-06-20T18:00:00', access_expired: false },
+  ],
+  '/api/contacts': [
+    { id: 1, name: 'Іра Гример', title: 'гример', phone: '+380501112233', username: 'ira_makeup', note: '1200 грн/зміна', time: '2026-05-04T10:00:00' },
+    { id: 2, name: 'Світло-Прокат', title: 'оренда світла', phone: '+380442223344', username: null, note: '', time: '2026-05-04T10:00:00' },
   ],
 }
 
@@ -127,5 +132,19 @@ export function mockResponse(path) {
       ],
     }
   if (clean === '/api/ingest/tasks') return { count: 2 }
+  if (clean.startsWith('/api/people/')) {
+    const m = MOCK['/api/team'].find((x) => String(x.id) === clean.split('/')[3]) || MOCK['/api/team'][1]
+    return {
+      ...m,
+      since: '2026-03-01T09:00:00',
+      stats: { open: 2, done: 7, expenses: 3, spent: 4200 },
+      tasks: MOCK['/api/tasks'].filter((t) => t.status === 'open').slice(0, 2),
+      history: [
+        { type: 'task', text: 'Змонтувати ролик', time: '2026-06-10T18:20:00' },
+        { type: 'expense', text: 'Оренда обладнання', amount: 3200, time: '2026-06-09T12:00:00' },
+        { type: 'report', text: 'Зйомка пройшла, матеріал на диску', time: '2026-06-08T20:10:00' },
+      ],
+    }
+  }
   return { ok: true }
 }
